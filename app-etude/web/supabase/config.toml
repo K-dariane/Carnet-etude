@@ -1,0 +1,7 @@
+# Configuration minimale pour la CLI Supabase (déploiement de la fonction depuis GitHub Actions).
+# Projet : xyrlifukufcntwinrtvz.
+project_id = "carnet-etude"
+
+[functions.chat]
+# La fonction vérifie elle-même le jeton du testeur (auth.getUser) : voir supabase/functions/chat/index.ts.
+verify_jwt = false

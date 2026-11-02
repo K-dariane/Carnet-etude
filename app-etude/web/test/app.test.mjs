@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { preparer } from "../supabase/functions/_shared/chat.ts";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -14,7 +15,7 @@ const nm = join(web, "node_modules");
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
-let browser, ctx, pg, erreurs = [], appels = [], reponseChat = null;
+let browser, ctx, pg, erreurs = [], appels = [], refusees = [], reponseChat = null;
 const REPONSE = "### Intégration par parties\nD'après ton cours *cours*, \\[ \\int u v' = [uv] - \\int u' v \\]\n- Résultat : \\(x e^x - e^x + C\\)";
 const ndjson = (texte, extra = {}) => texte.match(/[\s\S]{1,25}/g).map(d => JSON.stringify({ type: "texte", delta: d })).join("\n") + "\n" +
   JSON.stringify({ type: "fin", text: texte, tronque: false, modele: "claude-haiku-5-5", tokens: 1234, quota: { utilise: 1234, limite: 500000, reinitialisation: "2026-11-09T00:00:00+01:00" }, ...extra }) + "\n";
@@ -44,6 +45,9 @@ async function contexte() {
   await c.route("https://fake.supabase.test/functions/v1/chat", async r => {
     const body = JSON.parse(r.request().postData()); const headers = r.request().headers();
     appels.push({ body, headers });
+    // La fausse fonction applique la vraie vérification du serveur : l'app doit envoyer des demandes acceptées.
+    const v = preparer(body);
+    if ("code" in v) { refusees.push({ body, v }); return r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ erreur: { code: v.code, message: "La demande envoyée n'est pas valide. Recharge la page et réessaie.", raison: v.raison } }) }); }
     if (reponseChat) return reponseChat(r, body);
     if (body.tache === "plan") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson('```json\n[{"titre":"Revoir les primitives","detail":"Tableau"},{"titre":"Formule IPP","detail":"Choisir u et v\'"},{"titre":"Exercices","detail":"10 calculs"}]\n```') });
     if (body.tache === "resume") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("- Notions vues : IPP\n- Difficulté : choix de u") });
@@ -237,4 +241,5 @@ test("base injoignable : message clair, pas de mode local", async () => {
 
 test("aucune erreur JavaScript pendant tout le parcours", () => {
   assert.deepEqual(erreurs, []);
+  assert.deepEqual(refusees, [], "aucune demande de l'app refusée par la vérification du serveur");
 });
