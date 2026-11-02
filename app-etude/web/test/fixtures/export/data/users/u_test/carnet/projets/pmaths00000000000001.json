@@ -1,0 +1,32 @@
+{
+  "titre": "Analyse 2 – l'intégrale",
+  "type": "exercices",
+  "matiere": "Mathématiques",
+  "objectif": "Maîtriser l'IPP $$ et les « guillemets »",
+  "echeance": "2026-11-20",
+  "nbSupports": 5,
+  "createdAt": 1793309294310,
+  "updatedAt": 1793309633030,
+  "plan": [
+    {
+      "id": "s1",
+      "titre": "Primitives",
+      "detail": "Tableau",
+      "fait": true
+    },
+    {
+      "id": "s2",
+      "titre": "IPP",
+      "detail": "Choisir u et v'",
+      "fait": false
+    }
+  ],
+  "evolutions": [
+    {
+      "de": "etude",
+      "vers": "exercices",
+      "date": 1793309500000
+    }
+  ],
+  "couleur": "bleu"
+}

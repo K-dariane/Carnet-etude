@@ -1,0 +1,21 @@
+{
+  "turns": [
+    {
+      "role": "user",
+      "content": "Explique l'IPP",
+      "ts": 1793309600000,
+      "hadImg": true,
+      "img": "/_blob/abc"
+    },
+    {
+      "role": "assistant",
+      "content": "### IPP\n\\[ \\int u v' \\]",
+      "ts": 1793309601000
+    },
+    {
+      "role": "event",
+      "content": "Le projet est passé de « Étude accompagnée » à « Exercices »",
+      "ts": 1793309602000
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Exports de l'artifact et SQL d'import : données personnelles, jamais dans le dépôt.
+/export*/
+/import/*.sql
+*.sql.out
+node_modules/

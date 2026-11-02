@@ -20,6 +20,10 @@ La base de connaissances du projet claude.ai est vide. Ressources existantes :
 - `carnet/index.html` : tout le code de la V1 « Carnet d'étude » (un seul fichier HTML, CSS et JS). C'est la source de l'artifact publié.
 - `test/mock.js`, `test/mock_guest.js`, `test/mock_nosample.js` : faux environnement Claude (base de données, IA, fichiers) pour tester sans claude.ai. `mock_guest.js` simule un testeur sans droit d'écriture ; `mock_nosample.js` un testeur sans accès à Claude.
 - `test/run.js`, `test/run_guest.js`, `test/run_copy.js` : tests de bout en bout Playwright (propriétaire, testeur, mode copie).
+- `web/` : version web autonome (Supabase) pour les testeurs, sans compte Claude. En cours, voir `web/README.md`.
+  - `web/supabase/migrations/` : schéma de la base et règles d'accès.
+  - `web/import/import.mjs` : import des projets de l'artifact (génère un script SQL).
+  - `web/test/` : tests (`npm test` dans `web/`, Postgres local).
 - `couts/modele.py` : modèle de coûts (IA par séance et par étudiant, coûts fixes, scénarios de prix).
 - Artifact « Carnet d'étude » : https://claude.ai/artifact/Mr8uMTEjFs1su6snCTDPhr (slug `a8d3168d-afef-460f-a726-8c73c818a0f9`), partagé publiquement.
 - Doc « Partie administrative du Carnet d'étude » : https://claude.ai/artifact/U2M9uAi6h4yvGYB5J8hPiS (statut juridique RDC, fiscalité, paiements, textes juridiques, règles Anthropic, back-office, checklist de lancement).
@@ -55,6 +59,11 @@ La base de connaissances du projet claude.ai est vide. Ressources existantes :
 | Supports copiés (texte) dans les sous-projets, sans lien vers le fichier d'origine | Un sous-projet reste indépendant. |
 | Testeurs sans droit d'écriture → stockage local dans leur navigateur | Un lien public ne donne qu'un droit de lecture. |
 | **Proposé, non validé** : passes prépayés (semaine, mois, semestre), offre gratuite limitée à Haiku, environ 3 $/mois (5 à 6 $ en intensif), paiement par agrégateur mobile money (FlexPay ou MaxiCash), Supabase en région UE, entreprise individuelle puis SARLU | Voir le doc administratif et `couts/modele.py`. |
+| Version web (`web/`) : Haiku 5.5 par défaut, Sonnet 5.5 en mode approfondi (séances, transcriptions, plan) | Validé le 2026-11-02. La V1 garde Sonnet / Opus. |
+| Version web : quota de 500 000 tokens par testeur et par semaine (tous modèles confondus) | Validé le 2026-11-02, phase de test. |
+| Version web : appel à Claude via une Edge Function Supabase, clé API en secret côté serveur | La clé n'est jamais dans le navigateur. |
+| Version web : tables `projets`, `supports`, `fils` ; colonnes pour les champs simples (`parent_id`, `nb_supports`, `asset_id`, `created_at`, `updated_at` en snake_case), JSONB pour `plan`, `evolutions`, `turns` ; règles d'accès par `owner` ; cascade sur supports et fils ; sous-projet gardé si le projet principal est supprimé | Validé le 2026-11-02. Les autres noms de champs restent ceux de la V1. |
+| Version web : pas de mode copie ni de mode test local ; connexion par lien e-mail ou Google | Validé le 2026-11-02 : chaque testeur a un compte. |
 | **Écartés pour l'instant** : app native et stores, mode hors-ligne, stockage principal en localStorage | Pas nécessaires, ou peu fiables. |
 
 ## Reste à faire
