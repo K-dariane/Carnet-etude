@@ -1,0 +1,35 @@
+# Met en ligne l'app web du carnet (app-etude/web/app) sur GitHub Pages :
+# https://k-dariane.github.io/Carnet-etude/
+# Se lance à chaque modification de l'app sur la branche main, ou à la main (onglet Actions → « Run workflow »).
+# Prérequis (une seule fois) : Settings → Pages → Source : « GitHub Actions ».
+name: Mise en ligne de l'app
+
+on:
+  push:
+    branches: [main]
+    paths: ["app-etude/web/app/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app-etude/web/app
+      - id: deployment
+        uses: actions/deploy-pages@v4

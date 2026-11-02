@@ -12,7 +12,8 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
 | Connexion (lien e-mail, code, Google) | Fait, testé (faux Supabase) |
-| Branchement de l'app | Fait, testé (faux Supabase) ; à mettre en ligne |
+| Branchement de l'app | Fait, testé (faux Supabase) |
+| Mise en ligne (GitHub Pages) | Préparée ; à activer (voir « Mise en ligne ») |
 
 ## L'app (`app/`)
 
@@ -38,9 +39,22 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 4. **Authentication → Providers → Google** : identifiant client et secret de Google Cloud. Dans Google Cloud, l'URI de redirection autorisée est `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
 5. **`app/config.js`** : contient la clé publique (`sb_publishable_…`). Elle est faite pour être visible.
 
-### Mise en ligne
+### Mise en ligne (GitHub Pages)
 
-`app/` est un site statique (3 fichiers). N'importe quel hébergeur statique convient : Cloudflare Pages, Netlify, GitHub Pages. L'adresse obtenue doit être mise dans les réglages de connexion ci-dessus et, si tu veux restreindre l'accès à la fonction, dans le secret `ALLOWED_ORIGINS`.
+Adresse de l'app : **https://k-dariane.github.io/Carnet-etude/**
+
+`.github/workflows/pages.yml` publie le dossier `app/` à chaque modification de l'app sur la branche `main`. Tu peux aussi le lancer à la main : onglet Actions → « Mise en ligne de l'app » → Run workflow.
+
+Une seule fois :
+1. **GitHub → Settings → Pages → Build and deployment → Source** : choisir « GitHub Actions ».
+2. **Fusionner la branche de travail dans `main`** (pull request). La publication démarre toute seule.
+3. **Supabase → Authentication → URL Configuration** :
+   - Site URL : `https://k-dariane.github.io/Carnet-etude/`
+   - Redirect URLs : ajouter `https://k-dariane.github.io/Carnet-etude/**`
+4. **Supabase → Authentication → Email Templates → Magic Link** : ajouter `Ton code : {{ .Token }}` dans le message.
+5. Facultatif : **Supabase → Edge Functions → Secrets** : `ALLOWED_ORIGINS` = `https://k-dariane.github.io`. Seule l'app pourra alors appeler la fonction depuis un navigateur.
+
+L'app est installable sur l'écran d'accueil (`manifest.webmanifest`, `icone.svg`). Elle n'est pas indexée par les moteurs de recherche pendant les tests (`noindex`).
 
 ## Base de données
 
@@ -174,6 +188,8 @@ Ce que lance `npm test` :
 | `test/televerser.test.mjs` | Téléversement des fichiers vers Storage (faux serveur) |
 | `test/app.test.mjs` | L'app de bout en bout dans Chromium (Playwright), avec un faux Supabase (`test/fake_supabase.js`) et une fausse fonction `chat` : connexion, projets, supports, plan, séance, mode approfondi, photo, quota, refus, sous-projet, rechargement, suppression, autre testeur, déconnexion, base injoignable |
 | `test/supabase_reel.test.mjs` | Forme exacte des requêtes de `backend.js` avec la vraie bibliothèque supabase-js |
+| `test/pages.test.mjs` | L'app servie à son adresse GitHub Pages : fichiers trouvés, adresse de retour des liens de connexion, aucune clé secrète dans les fichiers publiés, manifeste |
+| `test/fichier-unique.test.mjs` | Le fichier à coller dans l'éditeur Supabase correspond au code testé |
 
 Aucun test n'appelle la vraie API Claude : ils ne coûtent rien.
 
