@@ -227,46 +227,65 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
 // Déployer avec --no-verify-jwt : la fonction vérifie elle-même le jeton du testeur (auth.getUser).
 // Facultatif : ALLOWED_ORIGINS = adresses de l'app séparées par des virgules (ex. https://carnet.example.com).
 
-const env = (k: string) => {
-  const v = Deno.env.get(k);
-  if (!v) throw new Error(`Secret manquant : ${k}`);
-  return v;
-};
-
-// Clé serveur : ancienne clé service_role, ou nouvelle clé secrète (sb_secret_…) fournie dans SUPABASE_SECRET_KEYS.
-function cleServeur(): string {
+// Configuration lue à la première requête : si un secret manque, la fonction répond quand même
+// et donne le NOM du secret manquant (jamais sa valeur), au lieu de planter au démarrage.
+function cleServeur(): string | null {
+  // Ancienne clé service_role, ou nouvelle clé secrète (sb_secret_…) fournie dans SUPABASE_SECRET_KEYS.
   const ancienne = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (ancienne) return ancienne;
   try {
     const cles = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}") as Record<string, string>;
-    const v = cles.default || Object.values(cles)[0];
-    if (v) return v;
-  } catch { /* format inattendu */ }
-  throw new Error("Secret manquant : SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_SECRET_KEYS");
+    return cles.default || Object.values(cles)[0] || null;
+  } catch { return null; }
 }
 
-const anthropic = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY"), maxRetries: 2 });
-const admin = createClient(env("SUPABASE_URL"), cleServeur(), {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+type Pret = { deps: Deps } | { manquants: string[] };
+let pret: Pret | null = null;
+function configurer(): Pret {
+  const cleClaude = Deno.env.get("ANTHROPIC_API_KEY");
+  const url = Deno.env.get("SUPABASE_URL");
+  const cle = cleServeur();
+  const manquants = [
+    ...(cleClaude ? [] : ["ANTHROPIC_API_KEY"]),
+    ...(url ? [] : ["SUPABASE_URL"]),
+    ...(cle ? [] : ["SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_SECRET_KEYS)"]),
+  ];
+  if (manquants.length) return { manquants };
+  const anthropic = new Anthropic({ apiKey: cleClaude!, maxRetries: 2 });
+  const admin = createClient(url!, cle!, { auth: { persistSession: false, autoRefreshToken: false } });
+  return { deps: {
+    anthropic,
+    sdk: Anthropic,
+    origines: (Deno.env.get("ALLOWED_ORIGINS") || "").split(",").map(s => s.trim()).filter(Boolean),
+    async userFromToken(jwt) {
+      const { data, error } = await admin.auth.getUser(jwt);
+      return error || !data.user ? null : { id: data.user.id };
+    },
+    async quota(owner): Promise<Quota> {
+      const { data, error } = await admin.rpc("ia_quota", { p_owner: owner }).single();
+      if (error) throw error;
+      const d = data as { utilise: number; limite: number; reinitialisation: string };
+      return { utilise: Number(d.utilise), limite: Number(d.limite), reinitialisation: d.reinitialisation };
+    },
+    async enregistrer(appel: Appel) {
+      const { error } = await admin.from("ia_appels").insert(appel);
+      if (error) throw error;
+    },
+    log: (...a) => console.error(...a),
+  } };
+}
 
-Deno.serve(req => handle(req, {
-  anthropic,
-  sdk: Anthropic,
-  origines: (Deno.env.get("ALLOWED_ORIGINS") || "").split(",").map(s => s.trim()).filter(Boolean),
-  async userFromToken(jwt) {
-    const { data, error } = await admin.auth.getUser(jwt);
-    return error || !data.user ? null : { id: data.user.id };
-  },
-  async quota(owner): Promise<Quota> {
-    const { data, error } = await admin.rpc("ia_quota", { p_owner: owner }).single();
-    if (error) throw error;
-    const d = data as { utilise: number; limite: number; reinitialisation: string };
-    return { utilise: Number(d.utilise), limite: Number(d.limite), reinitialisation: d.reinitialisation };
-  },
-  async enregistrer(appel: Appel) {
-    const { error } = await admin.from("ia_appels").insert(appel);
-    if (error) throw error;
-  },
-  log: (...a) => console.error(...a),
-}));
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+
+Deno.serve(req => {
+  if (!pret || "manquants" in pret) pret = configurer();   // réessaie tant que la configuration est incomplète
+  const p = pret;
+  if ("manquants" in p) {
+    console.error("Secrets manquants :", p.manquants.join(", "));
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    return new Response(JSON.stringify({ erreur: { code: "configuration",
+      message: "Le serveur du carnet n'est pas encore configuré. Préviens l'équipe.", manquants: p.manquants } }),
+      { status: 503, headers: { ...CORS, "Content-Type": "application/json; charset=utf-8" } });
+  }
+  return handle(req, p.deps);
+});

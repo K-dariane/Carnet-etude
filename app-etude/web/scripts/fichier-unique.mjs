@@ -13,7 +13,7 @@ export function fabriquer() {
   let coeur = readFileSync(join(f, "_shared/chat.ts"), "utf8");
   let entree = readFileSync(join(f, "chat/index.ts"), "utf8");
   coeur = coeur.replace(/^import type Anthropic from "@anthropic-ai\/sdk";\n/m, "");
-  entree = entree.replace(/^import \{ handle, type Appel, type Quota \} from "\.\.\/_shared\/chat\.ts";\n/m, "");
+  entree = entree.replace(/^import \{ handle, type Appel, type Deps, type Quota \} from "\.\.\/_shared\/chat\.ts";\n/m, "");
   for (const [nom, cible] of Object.entries(imports)) entree = entree.replaceAll(`from "${nom}"`, `from "${cible}"`);
   if (/from "@|_shared/.test(coeur + entree)) throw new Error("import non remplacé");
   const lignesImport = entree.match(/^import .*;\n/gm).join("");
