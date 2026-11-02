@@ -1,0 +1,6 @@
+{
+  "name": "carnet-tests",
+  "private": true,
+  "scripts": { "test": "node run.js && node run_guest.js && node run_copy.js" },
+  "devDependencies": { "marked": "12.0.2", "dompurify": "3.1.6", "mathjax": "3.2.2", "pdfjs-dist": "3.11.174", "playwright": "*" }
+}

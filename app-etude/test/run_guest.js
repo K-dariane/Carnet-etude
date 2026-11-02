@@ -1,0 +1,24 @@
+const { chromium } = require('playwright'); const path = require('path');
+(async () => {
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 400, height: 860 } }); const pg = await ctx.newPage();
+  const errs = []; pg.on('pageerror', e => errs.push('pageerror ' + e.message)); pg.on('console', m => { if (m.type() === 'error' && !/ERR_FAILED/.test(m.text())) errs.push('console ' + m.text()); });
+  await pg.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
+  await pg.route(/cdn\.jsdelivr\.net\/npm\/(.+)/, r => { const m = r.request().url().match(/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/); r.fulfill({ path: path.join(__dirname, 'node_modules', m[1], m[2]) }); });
+  await pg.addInitScript({ path: path.join(__dirname, 'mock_guest.js') });
+  await pg.route('http://carnet.test/', r => r.fulfill({ path: path.join(__dirname, '..', 'carnet', 'index.html'), contentType: 'text/html' }));
+  await pg.goto('http://carnet.test/');
+  await pg.waitForSelector('#pform');
+  console.log('banner:', (await pg.textContent('#localbanner')).slice(0, 60));
+  await pg.fill('#f-titre', 'Test invité'); await pg.click('button[type=submit]'); await pg.waitForSelector('#drop');
+  await pg.click('summary:has-text("Écrire une note")'); await pg.fill('#note-txt', 'Note locale'); await pg.click('[data-a=add-note]');
+  await pg.waitForFunction(() => document.querySelectorAll('.sup').length === 1);
+  await pg.click('[data-tab=seance]'); await pg.fill('#msg', 'Salut'); await pg.click('#sendbtn');
+  await pg.waitForFunction(() => document.querySelectorAll('.msg.assistant').length === 1 && !document.querySelector('[data-a=stop]'), null, { timeout: 15000 });
+  await pg.waitForTimeout(300);
+  await pg.reload(); await pg.waitForSelector('.card');
+  console.log('after reload cards:', await pg.locator('.card').count(), await pg.textContent('.card h2'));
+  await pg.click('.card'); await pg.waitForSelector('.msg.assistant', { timeout: 5000 });
+  console.log('thread kept:', await pg.locator('.msg').count());
+  await pg.screenshot({ path: 'guest.png' });
+  console.log('ERRORS:', errs); await b.close();
+})();

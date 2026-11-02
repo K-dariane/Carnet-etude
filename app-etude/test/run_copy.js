@@ -1,0 +1,24 @@
+const { chromium } = require('playwright'); const path = require('path');
+(async () => {
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, permissions: ['clipboard-read', 'clipboard-write'] }); const pg = await ctx.newPage();
+  const errs = []; pg.on('pageerror', e => errs.push('pageerror ' + e.message)); pg.on('console', m => { if (m.type() === 'error' && !/ERR_FAILED/.test(m.text())) errs.push('console ' + m.text()); });
+  await pg.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
+  await pg.route(/cdn\.jsdelivr\.net\/npm\/(.+)/, r => { const m = r.request().url().match(/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/); r.fulfill({ path: path.join(__dirname, 'node_modules', m[1], m[2]) }); });
+  await pg.addInitScript({ path: path.join(__dirname, 'mock_nosample.js') });
+  await pg.route('http://carnet.test/', r => r.fulfill({ path: path.join(__dirname, '..', 'carnet', 'index.html'), contentType: 'text/html' }));
+  await pg.goto('http://carnet.test/'); await pg.waitForSelector('#pform');
+  await pg.fill('#f-titre', 'Mathématiques'); await pg.click('button[type=submit]'); await pg.waitForSelector('#drop');
+  await pg.click('summary:has-text("Écrire une note")'); await pg.fill('#note-txt', 'Théorème de Rolle'); await pg.click('[data-a=add-note]');
+  await pg.waitForFunction(() => document.querySelectorAll('.sup').length === 1);
+  await pg.click('[data-tab=seance]'); await pg.fill('#msg', 'Explique Rolle'); await pg.click('#sendbtn');
+  await pg.waitForSelector('#copypanel'); await pg.click('[data-a=copy-prompt]');
+  const clip = await pg.inputValue('#promptbox'); console.log('toast:', await pg.textContent('#toast'));
+  console.log('clipboard has rule/context/question:', clip.includes('Carnet d'), clip.includes('Théorème de Rolle'), clip.endsWith('Explique Rolle'), clip.length);
+  await pg.fill('#pasteback', 'Le théorème de Rolle : \\(f(a)=f(b)\\) **donc** il existe c.'); await pg.click('[data-a=add-answer]');
+  await pg.waitForTimeout(1500);
+  console.log('msgs:', await pg.locator('.msg').count(), 'panel gone:', !(await pg.$('#copypanel')), 'mjx:', await pg.locator('mjx-container').count());
+  await pg.reload(); await pg.click('.card'); await pg.waitForSelector('.msg.assistant');
+  console.log('kept after reload:', await pg.locator('.msg').count());
+  await pg.screenshot({ path: 'copy.png' });
+  console.log('ERRORS:', errs); await b.close();
+})();
