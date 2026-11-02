@@ -1,0 +1,13 @@
+{
+  "titre": "Quiz IPP",
+  "type": "quiz",
+  "matiere": "Mathématiques",
+  "objectif": "Sous-projet",
+  "echeance": "",
+  "focus": "IPP",
+  "parentId": "pmaths00000000000001",
+  "nbSupports": 1,
+  "plan": [],
+  "createdAt": 1793354378852,
+  "updatedAt": 1793354459426
+}

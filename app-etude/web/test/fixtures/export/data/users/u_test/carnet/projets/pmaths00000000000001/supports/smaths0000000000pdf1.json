@@ -1,0 +1,9 @@
+{
+  "nom": "cours",
+  "kind": "pdf",
+  "texte": "Intégration par parties : ∫u v' = [uv] − ∫u' v\u0000 'cité'",
+  "actif": true,
+  "pages": 8,
+  "tronque": false,
+  "createdAt": 1793309554342
+}

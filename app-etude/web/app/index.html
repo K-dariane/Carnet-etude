@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carnet d'étude</title>
+<!-- Version web : app installable sur l'écran d'accueil ; pas d'indexation pendant les tests -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone.svg">
+<meta name="theme-color" content="#2442c4">
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+/* Plan : carnet d'étudiant — papier bleuté, encre bleue, surligneur jaune pour ce qui compte.
+   Mobile d'abord : une colonne, barre de saisie collée en bas pendant les séances. */
+:root {
+  --paper: #f3f5fa;
+  --surface: #ffffff;
+  --ink: #161b2e;
+  --muted: #5a6280;
+  --line: #dde2ee;
+  --accent: #2442c4;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6ebff;
+  --marker: #ffe066;
+  --marker-soft: #fff1a8;
+  --ok: #1d7f55;
+  --warn: #9a5b00;
+  --danger: #b4332a;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --radius: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1120; --surface: #171b2d; --ink: #e9ecf8; --muted: #9ba3c2; --line: #2a3051;
+    --accent: #8aa2ff; --accent-ink: #0b0f1f; --accent-soft: #1f2750; --marker: #f2cf3c; --marker-soft: #4a4116;
+    --ok: #4fc792; --warn: #e3a440; --danger: #f07a6f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1120; --surface: #171b2d; --ink: #e9ecf8; --muted: #9ba3c2; --line: #2a3051;
+  --accent: #8aa2ff; --accent-ink: #0b0f1f; --accent-soft: #1f2750; --marker: #f2cf3c; --marker-soft: #4a4116;
+  --ok: #4fc792; --warn: #e3a440; --danger: #f07a6f; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+
+/* En-tête */
+.top { position: sticky; top: 0; z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 10px; min-height: 56px; }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+.brand svg { color: var(--accent); }
+.top .spacer { flex: 1; }
+
+/* Boutons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line);
+  background: var(--surface); border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: .92rem; min-height: 40px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.danger { color: var(--danger); }
+.btn[data-armed="1"] { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.iconbtn { width: 40px; height: 40px; padding: 0; border-radius: 50%; }
+
+/* Accueil */
+main { padding: 18px 0 40px; }
+.hello { display: grid; gap: 6px; margin-bottom: 18px; }
+.hello h1 { font-size: 1.6rem; }
+.hello p { margin: 0; color: var(--muted); max-width: 60ch; }
+.cards { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px;
+  display: grid; gap: 8px; text-align: left; width: 100%; }
+button.card:hover { border-color: var(--accent); }
+.card h2 { font-size: 1.12rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: .88rem; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent); }
+.chip.due { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.chip.due.soon { border-color: var(--warn); color: var(--warn); }
+.progress { display: flex; align-items: center; gap: 10px; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { flex: 1; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 12px; }
+.section-head h2 { font-size: 1.15rem; }
+
+/* Formulaire */
+.form { display: grid; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px; }
+.field { display: grid; gap: 6px; }
+.field label, .field .lbl { font-weight: 700; font-size: .95rem; }
+.field .hint { color: var(--muted); font-size: .85rem; margin: 0; }
+[hidden] { display: none !important; }  /* version web : l'attribut hidden l'emporte sur display (écran de connexion) */
+input[type=text], input[type=email], input[type=date], textarea {
+  width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 10px 12px; }
+textarea { resize: vertical; min-height: 80px; }
+.types { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.type { position: relative; }
+.type input { position: absolute; opacity: 0; inset: 0; }
+.type span { display: grid; gap: 2px; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; height: 100%; background: var(--paper); }
+.type b { font-size: .95rem; }
+.type small { color: var(--muted); font-size: .8rem; line-height: 1.35; }
+.type input:checked + span { border-color: var(--accent); background: var(--accent-soft); }
+.type input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+/* Vue projet */
+.phead { display: grid; gap: 8px; padding: 14px 0 10px; }
+.phead h1 { font-size: 1.4rem; }
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; margin: 6px 0 14px; }
+.tabs button { flex: 1; border: 0; background: transparent; border-radius: 999px; padding: 8px 6px; font-weight: 700; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Séance */
+.thread { display: grid; gap: 14px; padding-bottom: 12px; }
+.msg { display: grid; gap: 4px; }
+.msg .who { font-size: .78rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.msg.user { justify-items: end; }
+.msg.user .bubble { background: var(--accent); color: var(--accent-ink); border-radius: 16px 16px 4px 16px; max-width: 88%; white-space: pre-wrap; }
+.msg.assistant .bubble { background: var(--surface); border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; width: 100%; }
+.bubble { padding: 10px 14px; overflow-wrap: anywhere; }
+.bubble img.thumb { display: block; max-width: 180px; border-radius: 8px; margin-bottom: 6px; }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 1.05rem; margin: 14px 0 6px; }
+.md p, .md ul, .md ol { margin: 8px 0; }
+.md ul, .md ol { padding-left: 1.3em; }
+.md strong { background: var(--marker-soft); color: inherit; border-radius: 4px; padding: 0 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.md code { background: var(--paper); border-radius: 5px; padding: 1px 5px; font-size: .9em; }
+.md pre { background: var(--paper); border-radius: 8px; padding: 10px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; font-size: .92rem; }
+.md th, .md td { border: 1px solid var(--line); padding: 5px 9px; }
+.md blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--accent); color: var(--muted); }
+.md mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.illu { margin: 10px 0; background: #ffffff; border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; }
+.illu img { max-width: 100%; height: auto; }
+.illu.pending { color: #5a6280; font-size: .9rem; padding: 18px; }
+.thinking { color: var(--muted); font-style: italic; }
+.err { color: var(--danger); font-size: .9rem; }
+.notice { background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px 16px; color: var(--muted); }
+.notice b { color: var(--ink); }
+
+.composer { position: sticky; bottom: 0; background: var(--paper); padding: 10px 0 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.quick button { white-space: nowrap; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: .85rem; }
+.quick button:hover { border-color: var(--accent); }
+.inputrow { display: flex; gap: 8px; align-items: flex-end; }
+.inputrow textarea { min-height: 46px; max-height: 180px; border-radius: 22px; padding: 11px 16px; background: var(--surface); }
+.pending-img { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); }
+.pending-img img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
+.toggles { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .85rem; color: var(--muted); }
+.toggles label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Supports */
+.drop { display: grid; gap: 10px; background: var(--surface); border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 16px; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.sup { display: grid; gap: 6px; }
+.sup-head { display: flex; gap: 10px; align-items: flex-start; }
+.kind { flex: none; font-size: .72rem; font-weight: 700; letter-spacing: .05em; padding: 3px 7px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); color: var(--muted); }
+.sup-head .t { flex: 1; min-width: 0; }
+.sup-head .t b { display: block; overflow-wrap: anywhere; }
+.sup details summary { cursor: pointer; color: var(--accent); font-size: .88rem; font-weight: 700; }
+.sup pre { white-space: pre-wrap; font-family: var(--font-body); font-size: .88rem; background: var(--paper); border-radius: 8px; padding: 10px; max-height: 300px; overflow: auto; }
+.jobs { display: grid; gap: 6px; }
+.job { font-size: .88rem; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.job.bad { color: var(--danger); }
+.spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Plan */
+.steps { display: grid; gap: 8px; }
+.step { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.step input[type=checkbox] { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.step .t { flex: 1; }
+.step .t b { display: block; }
+.step .t small { color: var(--muted); }
+.step.done .t b { text-decoration: line-through; color: var(--muted); }
+.step .x { border: 0; background: none; color: var(--muted); font-size: 1.2rem; line-height: 1; padding: 2px 6px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions .btn { min-height: 36px; padding: 6px 12px; font-size: .86rem; }
+.panel { display: grid; gap: 14px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--radius); padding: 16px; margin: 4px 0 10px; }
+.panel h2 { font-size: 1.08rem; }
+.panel .hint { color: var(--muted); font-size: .88rem; margin: 0; }
+.checkrow { display: flex; gap: 8px; align-items: flex-start; font-size: .92rem; }
+.checkrow input { margin-top: 4px; accent-color: var(--accent); }
+.family { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .88rem; color: var(--muted); }
+.family button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: .84rem; font-weight: 700; color: var(--accent); }
+.family button:hover { border-color: var(--accent); }
+.subcards { display: grid; gap: 8px; margin: -4px 0 4px 18px; padding-left: 12px; border-left: 2px solid var(--line); }
+.subcards .card { padding: 10px 14px; }
+.subcards .card h2 { font-size: 1rem; }
+.evt { text-align: center; font-size: .82rem; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.evt::before, .evt::after { content: ""; flex: 1; border-top: 1px dashed var(--line); }
+.toast { position: fixed; left: 50%; top: 66px; transform: translateX(-50%); background: var(--ink); color: var(--paper);
+  padding: 10px 16px; border-radius: 10px; font-size: .9rem; z-index: 20; max-width: calc(100% - 32px); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+</style>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+  svg: { fontCache: "global" },
+  options: { enableMenu: false },
+  startup: {
+    typeset: false,
+    ready() {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { if (window.__flushTypeset) window.__flushTypeset(); });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" async></script>
+<!-- Version web : configuration publique, client Supabase, branchement (base, IA, fichiers, connexion) -->
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="backend.js"></script>
+</head>
+<body>
+<header class="top"><div class="wrap" id="top"></div></header>
+<main><div class="wrap" id="app"><p class="thinking">Ouverture du carnet…</p></div></main>
+<div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ---------- Constantes ---------- */
+const FENCE = "`".repeat(3);
+const TYPES = {
+  etude:    { nom: "Étude accompagnée", desc: "Comprendre un cours pas à pas", quick: ["Explique-moi cette notion pas à pas : ", "Fais-moi une fiche résumé du chapitre", "Illustre ce concept avec un schéma : ", "Vérifie que j'ai compris avec 3 questions"],
+    mode: "Mode ÉTUDE ACCOMPAGNÉE : explique une notion à la fois, du plus simple au plus difficile, avec un exemple concret. Vérifie régulièrement la compréhension par une petite question. Si l'étudiant bloque, reformule autrement plutôt que de répéter." },
+  revision: { nom: "Révision", desc: "Mémoriser et consolider", quick: ["Fiche de révision du chapitre", "QCM de 5 questions", "Les pièges classiques à éviter", "Interroge-moi oralement, une question à la fois"],
+    mode: "Mode RÉVISION : privilégie le rappel actif (questions, QCM, flashcards), les fiches synthétiques et les points clés à retenir. Corrige les réponses de l'étudiant en expliquant brièvement l'erreur. Pour un QCM, numérote les questions et donne la correction seulement après les réponses de l'étudiant, sauf s'il la demande." },
+  exercices:{ nom: "Exercices", desc: "S'entraîner avec correction", quick: ["Donne-moi un exercice", "Un exercice plus difficile", "Corrige ma réponse : ", "Donne-moi juste un indice"],
+    mode: "Mode EXERCICES : propose des exercices de difficulté progressive liés aux supports. Ne donne pas la solution avant que l'étudiant ait essayé ; propose d'abord un indice. Corrige en détaillant chaque étape et en signalant précisément l'erreur." },
+  devoir:   { nom: "Aide aux devoirs", desc: "Être guidé sans faire à ta place", quick: ["Aide-moi à démarrer ce devoir", "Donne-moi un indice", "Vérifie ma démarche : ", "Explique la méthode à utiliser"],
+    mode: "Mode AIDE AUX DEVOIRS : guide l'étudiant pour qu'il trouve lui-même (méthode, indices, vérification des étapes). Ne rédige pas la solution complète d'emblée ; donne-la seulement si l'étudiant la demande explicitement après avoir essayé." },
+  quiz:     { nom: "Quiz & QCM", desc: "Se tester en mode jeu", quick: ["Lance un QCM de 5 questions", "Quiz rapide : vrai ou faux", "Questions sur mes erreurs précédentes", "Un QCM plus difficile"],
+    mode: "Mode QUIZ : pose les questions une par une (QCM à 4 choix A à D, vrai/faux ou réponse courte), attends la réponse de l'étudiant, puis corrige brièvement en expliquant pourquoi, et passe à la suivante. Tiens le score et fais un bilan à la fin de la série (notions maîtrisées, notions à revoir)." },
+  examen:   { nom: "Préparation d'examen", desc: "Planifier et s'entraîner", quick: ["Plan de révision jusqu'à l'examen", "Donne-moi un sujet type", "QCM de 10 questions", "Les points essentiels à maîtriser"],
+    mode: "Mode PRÉPARATION D'EXAMEN : tiens compte de l'échéance, priorise les notions les plus probables et les plus rentables, propose des sujets types dans le format de l'examen et des conseils de méthode et de gestion du temps." },
+  autre:    { nom: "Autre", desc: "Projet libre", quick: ["Résume mes supports", "Explique-moi : ", "Fais-moi un schéma de : ", "Pose-moi 3 questions"],
+    mode: "Mode LIBRE : adapte-toi à la demande de l'étudiant." }
+};
+const RULES = [
+  "Tu es le tuteur personnel d'un étudiant universitaire, dans son « Carnet d'étude ». Réponds toujours en français.",
+  "",
+  "Style :",
+  "- Clair et concis : va à l'essentiel, phrases courtes, une idée par paragraphe, pas de remplissage.",
+  "- Structure avec des titres courts (###), des listes et du **gras** pour les mots clés quand ça aide.",
+  "- Formules en LaTeX : \\( ... \\) dans le texte et \\[ ... \\] pour les formules centrées. N'utilise jamais le signe $ comme délimiteur.",
+  "- Illustrations : dès qu'une notion est abstraite ou spatiale (géométrie, courbes de fonctions, vecteurs, arbres de probabilités, circuits, processus, structures, chronologies), ajoute un schéma dans un bloc de code " + FENCE + "svg contenant un SVG complet et autonome : attribut viewBox, largeur au plus 640, fond blanc, traits et textes sombres (police sans-serif, taille au moins 14), au plus 3 couleurs d'accent sobres, étiquettes claires, aucun script ni image externe. Un schéma simple et juste vaut mieux qu'un schéma chargé ; vérifie la cohérence des coordonnées.",
+  "- Appuie-toi en priorité sur les supports de cours fournis et utilise leurs notations ; indique brièvement quand tu t'en sers (ex. « d'après ton cours *Nom* »). Si une information n'y figure pas, dis-le et réponds avec tes connaissances générales.",
+  "- Termine si utile par une seule courte question ou proposition de suite."
+].join("\n");
+const RULES_CHAT = RULES
+  .replace(/^Tu es le tuteur[^\n]*/, "Tu es le tuteur personnel d'un étudiant universitaire. Il a préparé cette demande avec son « Carnet d'étude ». Réponds toujours en français.")
+  .replace(/- Illustrations :[^\n]*/, "- Illustrations : dès qu'une notion est abstraite ou spatiale, ajoute un schéma simple et juste (visuel ou SVG).");
+const CTX_BUDGET = 150000;      // caractères de supports envoyés à Claude
+const INPUT_BUDGET = 245000;    // octets max d'une requête
+const SUPPORT_MAX = 110000;     // caractères stockés par support
+const SCAN_MAX_PAGES = 10;
+
+/* ---------- Utilitaires ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const bytes = s => new TextEncoder().encode(s).length;
+const uid = () => Math.random().toString(36).slice(2, 10);
+const words = s => (String(s || "").match(/\S+/g) || []).length;
+function toast(msg, ms = 4200) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, ms);
+}
+function daysLeft(d) {
+  if (!d) return null;
+  const end = new Date(d + "T23:59:59"); const now = new Date();
+  return Math.ceil((end - now) / 86400000);
+}
+function dueChip(p) {
+  const n = daysLeft(p.echeance); if (n === null) return "";
+  const label = n < 0 ? "Échéance passée" : n === 0 ? "Aujourd'hui" : "J-" + n;
+  return `<span class="chip due ${n <= 7 ? "soon" : ""}">${label}</span>`;
+}
+function progressOf(p) {
+  const plan = Array.isArray(p.plan) ? p.plan : [];
+  const done = plan.filter(s => s.fait).length;
+  return { done, total: plan.length, pct: plan.length ? Math.round(done * 100 / plan.length) : 0 };
+}
+function progressHtml(p) {
+  const g = progressOf(p);
+  if (!g.total) return `<div class="progress"><span>Pas encore de plan</span></div>`;
+  return `<div class="progress"><div class="bar" role="progressbar" aria-valuenow="${g.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${g.pct}%"></i></div><span>${g.done}/${g.total} étapes</span></div>`;
+}
+const ERR = {
+  not_granted: "Le carnet n'a pas l'autorisation d'utiliser Claude. Recharge la page pour qu'elle te soit redemandée.",
+  rate_limited: "Limite d'utilisation de Claude atteinte pour le moment. Réessaie un peu plus tard.",
+  session_expired: "Ta session a expiré : reconnecte-toi à Claude puis recharge la page.",
+  refused: "Claude n'a pas pu répondre à cette demande. Reformule-la.",
+  prompt_too_large: "Trop de contenu envoyé d'un coup. Désactive quelques supports ou efface la conversation.",
+  image_rejected: "Cette image n'a pas été acceptée (format ou taille). Essaie une autre photo.",
+  images_unavailable: "L'envoi d'images à Claude n'est pas disponible ici.",
+  sampling_disabled: "Claude n'est pas disponible pour ce compte.",
+  empty_completion: "Claude n'a rien répondu. Reformule ou demande moins à la fois.",
+  invalid_json: "La réponse n'avait pas le format attendu. Réessaie."
+};
+const errMsg = e => (e && e.serveur && e.message) || (e && ERR[e.code]) || "Problème de connexion avec Claude. Réessaie.";
+
+/* Écritures : une à la fois par document */
+const chains = {};
+function write(ref, fn) {
+  const k = ref.path;
+  chains[k] = (chains[k] || Promise.resolve()).then(fn).catch(e => {
+    console.error(e);
+    toast(e && e.code === "quota_exceeded" ? "Espace de stockage plein : supprime d'anciens supports." : "L'enregistrement a échoué. Réessaie.");
+  });
+  return chains[k];
+}
+
+/* Confirmation en deux clics (pas de boîte de dialogue) */
+function armed(btn) {
+  if (btn.dataset.armed === "1") { btn.dataset.armed = "0"; btn.textContent = btn.dataset.label; return true; }
+  btn.dataset.armed = "1"; btn.dataset.label = btn.textContent; btn.textContent = "Confirmer ?";
+  setTimeout(() => { if (btn.dataset.armed === "1") { btn.dataset.armed = "0"; btn.textContent = btn.dataset.label; } }, 4000);
+  return false;
+}
+
+/* ---------- Rendu Markdown + formules + schémas ---------- */
+const typesetQueue = [];
+window.__flushTypeset = () => { while (typesetQueue.length) typeset(typesetQueue.shift()); };
+function typeset(node) {
+  const mj = window.MathJax;
+  if (mj && mj.typesetPromise) mj.typesetPromise([node]).catch(() => {});
+  else typesetQueue.push(node);
+}
+function svgFigure(code) {
+  if (!/<\/svg>/i.test(code)) return `<figure class="illu pending">Illustration en cours…</figure>`;
+  const clean = window.DOMPurify ? DOMPurify.sanitize(code, { USE_PROFILES: { svg: true, svgFilters: true } }) : "";
+  if (!clean) return "";
+  const b64 = btoa(unescape(encodeURIComponent(clean)));
+  return `<figure class="illu"><img alt="Illustration" src="data:image/svg+xml;base64,${b64}"></figure>`;
+}
+if (window.marked) {
+  marked.use({ renderer: {
+    code(a, b) {
+      const text = typeof a === "object" ? a.text : a;
+      const lang = ((typeof a === "object" ? a.lang : b) || "").trim().toLowerCase();
+      if (lang === "svg" || (!lang && /^\s*<svg[\s>]/i.test(text))) return svgFigure(text);
+      return `<pre><code>${esc(text)}</code></pre>`;
+    }
+  } });
+}
+function renderMd(src) {
+  src = String(src || "");
+  if (!window.marked || !window.DOMPurify) return `<p>${esc(src).replace(/\n/g, "<br>")}</p>`;
+  const maths = [];
+  const protect = t => t.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$(?!\s)([^$\n]+?)(?<!\s)\$/g,
+    (m, d1, d2, i1, i2) => {
+      const disp = d1 != null || d2 != null; const tex = d1 ?? d2 ?? i1 ?? i2;
+      maths.push(disp ? `<span class="mjd">\\[${esc(tex)}\\]</span>` : `<span class="mji">\\(${esc(tex)}\\)</span>`);
+      return "MATHPH" + (maths.length - 1) + "X";
+    });
+  const parts = src.split(/(```[\s\S]*?(?:```|$))/g);
+  const prepared = parts.map(p => p.startsWith("```") ? p : protect(p)).join("");
+  let html = DOMPurify.sanitize(marked.parse(prepared, { breaks: false }));
+  html = html.replace(/MATHPH(\d+)X/g, (m, i) => maths[+i] || "");
+  return html;
+}
+
+/* ---------- Images & PDF ---------- */
+async function shrinkImage(file, maxSide = 1800) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(b => r(b || file), "image/jpeg", 0.86));
+  } catch { return file; }
+}
+let pdfReady = null;
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+}
+function loadPdfJs() {
+  if (!pdfReady) pdfReady = (async () => {
+    await loadScript("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js");
+    return window.pdfjsLib;
+  })();
+  return pdfReady;
+}
+
+/* ---------- Stockage local (mode test) ---------- */
+function makeLocalDb() {
+  const mem = new Map(); const subs = new Set(); let idb = null; const ST = "docs";
+  const ready = (async () => {
+    try {
+      idb = await new Promise((res, rej) => { const r = indexedDB.open("carnet-etude-local", 1); r.onupgradeneeded = () => r.result.createObjectStore(ST); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+      const all = await new Promise((res, rej) => { const out = []; const c = idb.transaction(ST, "readonly").objectStore(ST).openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { out.push([cur.key, cur.value]); cur.continue(); } else res(out); }; c.onerror = () => rej(c.error); });
+      all.forEach(([k, v]) => mem.set(k, v));
+    } catch { idb = null; }
+  })();
+  const persist = (k, v) => { if (!idb) return; try { const st = idb.transaction(ST, "readwrite").objectStore(ST); if (v === undefined) st.delete(k); else st.put(v, k); } catch {} };
+  const notify = () => setTimeout(() => subs.forEach(f => f()), 0);
+  const snap = p => ({ id: p.split("/").pop(), exists: mem.has(p), data: () => mem.get(p), metadata: { fromCache: false, hasPendingWrites: false } });
+  const docRef = p => ({ id: p.split("/").pop(), path: p,
+    get: async () => snap(p),
+    set: async d => { const v = JSON.parse(JSON.stringify(d)); mem.set(p, v); persist(p, v); notify(); },
+    update: async d => { if (!mem.has(p)) throw { code: "invalid_argument" }; const v = { ...mem.get(p), ...JSON.parse(JSON.stringify(d)) }; mem.set(p, v); persist(p, v); notify(); },
+    delete: async () => { mem.delete(p); persist(p); notify(); },
+    onSnapshot: next => { const f = () => next(snap(p)); subs.add(f); setTimeout(f, 0); return () => subs.delete(f); },
+    collection: c => colRef(p + "/" + c) });
+  const colRef = p => {
+    const n = p.split("/").length + 1;
+    const docs = () => [...mem.keys()].filter(k => k.startsWith(p + "/") && k.split("/").length === n).map(snap);
+    return { path: p,
+      get: async () => { const d = docs(); return { docs: d, size: d.length, empty: !d.length }; },
+      onSnapshot: next => { const f = () => { const d = docs(); next({ docs: d, size: d.length, empty: !d.length, docChanges: () => [], metadata: {} }); }; subs.add(f); setTimeout(f, 0); return () => subs.delete(f); },
+      doc: id => docRef(p + "/" + (id || uid() + uid())),
+      add: async d => { const r = docRef(p + "/" + uid() + uid()); await r.set(d); return r; } };
+  };
+  return { ready, persistent: () => !!idb, doc: docRef, collection: colRef };
+}
+
+/* ---------- État ---------- */
+const S = {
+  ready: false, fatal: null, db: null, uid: null, sample: null, assets: null, limits: null,
+  colP: null, projets: [], loaded: false,
+  view: "home", editId: null, current: null, tab: "seance",
+  supports: [], thread: [], unsubs: [], jobs: [],
+  panel: null, busy: false, ctl: null, deep: false, pendingImg: null, streamEl: null
+};
+const proj = () => S.projets.find(p => p.id === S.current);
+const projRef = id => S.colP.doc(id || S.current);
+const filRef = id => projRef(id).collection("fil").doc("principal");
+
+/* ---------- Démarrage ---------- */
+async function init() {
+  const use = n => (window.claude && claude.use) ? claude.use(n).catch(() => null) : Promise.resolve(null);
+  const [db, user, sample, assets] = await Promise.all([use("db"), use("user"), use("sample"), use("assets")]);
+  S.db = db; S.sample = sample; S.assets = assets;
+  S.uid = user && user.id ? await user.id().catch(() => null) : null;
+  if (sample && sample.limits) S.limits = await sample.limits().catch(() => null);
+  let online = false;
+  if (db && S.uid) {
+    try { await db.doc(`data/users/${S.uid}/carnet`).set({ ouvert: Date.now() }); online = true; } catch { online = false; }
+  }
+  if (online) S.colP = db.doc(`data/users/${S.uid}/carnet`).collection("projets");
+  else { S.fatal = "Impossible de joindre le serveur du carnet. Vérifie ta connexion internet puis recharge la page."; S.ready = true; render(); return; }
+  S.colP.onSnapshot(snap => {
+    S.projets = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    S.loaded = true;
+    if (S.view === "projet" && !proj()) { closeProject(); }
+    if (S.view === "home") render();
+    else if (S.view === "projet") { renderTop(); renderPHead(); if (S.tab === "plan" && !document.activeElement?.closest("#app")) renderTab(); }
+  }, e => { S.fatal = "Impossible de charger tes projets. Recharge la page."; render(); });
+  S.ready = true;
+  render();
+}
+
+/* ---------- Rendu général ---------- */
+const ICON_BOOK = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/></svg>`;
+function renderTop() {
+  const t = $("#top");
+  if (S.view === "home" || !S.ready) {
+    t.innerHTML = `<div class="brand">${ICON_BOOK}<span>Carnet d'étude</span></div><span class="spacer"></span>` +
+      (S.ready ? `<button class="btn primary" data-a="new">+ Nouveau projet</button><button class="btn ghost" data-a="logout" title="${esc(window.carnetWeb && carnetWeb.email() || "")}">Se déconnecter</button>` : "");
+  } else {
+    const p = S.view === "projet" ? proj() : null;
+    t.innerHTML = `<button class="btn iconbtn ghost" data-a="home" aria-label="Retour aux projets"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="brand"><span>${S.view === "form" ? (S.editId ? "Modifier le projet" : "Nouveau projet") : esc(p ? p.titre : "")}</span></div><span class="spacer"></span>` +
+      (S.view === "projet" ? `<button class="btn" data-a="edit">Modifier</button>` : "");
+  }
+}
+function render() {
+  renderTop();
+  const app = $("#app");
+  if (S.fatal) { app.innerHTML = `<div class="notice"><b>Carnet indisponible.</b><br>${esc(S.fatal)}</div>`; return; }
+  if (!S.ready || !S.loaded) { app.innerHTML = `<p class="thinking">Ouverture du carnet…</p>`; return; }
+  let banner = $("#localbanner");
+  if (S.local && !banner) {
+    banner = document.createElement("div"); banner.id = "localbanner"; banner.className = "notice";
+    banner.style.cssText = "margin:12px auto 0;max-width:728px";
+    banner.innerHTML = S.localPersistent
+      ? "<b>Mode test.</b> Tes projets sont enregistrés dans ce navigateur, sur cet appareil uniquement. Utilise toujours le même navigateur pour les retrouver."
+      : "<b>Mode test.</b> Ce navigateur ne permet pas d'enregistrer : tes projets disparaîtront si tu fermes la page. Ouvre le lien dans Chrome ou Safari.";
+    $("main").prepend(banner);
+  }
+  if (S.view === "home") return renderHome();
+  if (S.view === "form") return renderForm();
+  if (S.view === "projet") return renderProjet();
+}
+
+function renderHome() {
+  const app = $("#app");
+  if (!S.projets.length) { S.view = "form"; S.editId = null; return render(); }
+  app.innerHTML = `<div class="hello"><h1>Tes projets d'étude</h1><p>Choisis un projet pour reprendre une séance, ajouter des supports ou suivre ton plan.</p></div>
+    <div class="cards">${roots().map(p => cardHtml(p) + (kids(p.id).length ? `<div class="subcards">${kids(p.id).map(cardHtml).join("")}</div>` : "")).join("")}</div>`;
+}
+
+const kids = id => S.projets.filter(x => x.parentId === id).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+const roots = () => S.projets.filter(x => !x.parentId || !S.projets.some(y => y.id === x.parentId));
+function cardHtml(p) {
+  return `<button class="card" data-a="open" data-id="${esc(p.id)}">
+    <h2>${esc(p.titre)}</h2>
+    <div class="meta"><span class="chip">${esc((TYPES[p.type] || TYPES.autre).nom)}</span>${p.matiere ? `<span>${esc(p.matiere)}</span>` : ""}${dueChip(p)}${p.nbSupports ? `<span>${p.nbSupports} support${p.nbSupports > 1 ? "s" : ""}</span>` : ""}</div>
+    ${progressHtml(p)}
+  </button>`;
+}
+function renderForm() {
+  const p = S.editId ? S.projets.find(x => x.id === S.editId) : null;
+  const first = !S.projets.length;
+  const v = p || { titre: "", type: "etude", matiere: "", objectif: "", echeance: "" };
+  $("#app").innerHTML = `
+    ${first ? `<div class="hello"><h1>Bienvenue dans ton carnet d'étude</h1><p>Crée ton premier projet. Tu pourras ensuite y ajouter tes cours (PDF, photos, notes) et travailler avec Claude sur ce contenu.</p></div>` : ""}
+    <form class="form" id="pform" novalidate>
+      <div class="field"><label for="f-titre">Nom du projet</label>
+        <input type="text" id="f-titre" required maxlength="80" placeholder="ex. Intégrales – Analyse 2" value="${esc(v.titre)}"></div>
+      <div class="field"><span class="lbl" id="f-type-lbl">Type de projet</span>
+        <div class="types" role="radiogroup" aria-labelledby="f-type-lbl">${Object.entries(TYPES).map(([k, t]) => `
+          <label class="type"><input type="radio" name="type" id="f-type-${k}" value="${k}" ${v.type === k ? "checked" : ""}><span><b>${t.nom}</b><small>${t.desc}</small></span></label>`).join("")}</div></div>
+      <div class="field"><label for="f-matiere">Matière</label>
+        <input type="text" id="f-matiere" maxlength="60" placeholder="ex. Mathématiques" value="${esc(v.matiere)}"></div>
+      ${p && p.parentId ? `<div class="field"><label for="f-focus">Facette travaillée</label>
+        <input type="text" id="f-focus" maxlength="120" placeholder="ex. Intégration par parties uniquement" value="${esc(p.focus || "")}"></div>` : ""}
+      <div class="field"><label for="f-objectif">Objectif et contexte</label>
+        <p class="hint">Ce que tu veux atteindre, ton niveau, ce qui te bloque. Plus c'est précis, plus Claude s'adapte.</p>
+        <textarea id="f-objectif" rows="4" maxlength="2000" placeholder="ex. Maîtriser l'intégration par parties pour l'examen de juin, j'ai du mal à choisir u et v'.">${esc(v.objectif)}</textarea></div>
+      <div class="field"><label for="f-echeance">Échéance (facultatif)</label>
+        <input type="date" id="f-echeance" value="${esc(v.echeance || "")}"></div>
+      <p class="err" id="f-err" hidden></p>
+      <div class="row">
+        <button class="btn primary" type="submit">${p ? "Enregistrer" : "Créer le projet"}</button>
+        ${first ? "" : `<button class="btn" type="button" data-a="${p ? "back-projet" : "home"}">Annuler</button>`}
+        ${p ? `<span class="spacer" style="flex:1"></span><button class="btn danger" type="button" data-a="del-projet">Supprimer le projet</button>` : ""}
+      </div>
+    </form>`;
+  $("#pform").addEventListener("submit", saveForm);
+  if (!p) $("#f-titre").focus();
+}
+
+async function saveForm(ev) {
+  ev.preventDefault();
+  const titre = $("#f-titre").value.trim();
+  if (!titre) { const e = $("#f-err"); e.textContent = "Donne un nom à ton projet."; e.hidden = false; $("#f-titre").focus(); return; }
+  const data = {
+    titre, type: (document.querySelector('input[name="type"]:checked') || {}).value || "autre",
+    matiere: $("#f-matiere").value.trim(), objectif: $("#f-objectif").value.trim(),
+    echeance: $("#f-echeance").value || "", updatedAt: Date.now()
+  };
+  if ($("#f-focus")) data.focus = $("#f-focus").value.trim();
+  if (S.editId) {
+    const id = S.editId;
+    await write(projRef(id), () => projRef(id).update(data));
+    S.editId = null; openProject(id, S.tab);
+  } else {
+    const ref = S.colP.doc();
+    const full = { ...data, createdAt: Date.now(), plan: [], nbSupports: 0 };
+    await write(ref, () => ref.set(full));
+    if (!S.projets.some(x => x.id === ref.id)) S.projets.unshift({ id: ref.id, ...full });
+    openProject(ref.id, "supports");
+    toast("Projet créé. Ajoute maintenant tes supports de cours.");
+  }
+}
+
+/* ---------- Vue projet ---------- */
+function openProject(id, tab) {
+  closeSubs();
+  if (S.ctl) S.ctl.abort();
+  S.current = id; S.view = "projet"; S.tab = tab || "seance"; S.panel = null; S.copyEl = null; S.copyPrompt = null; msgCache.clear();
+  S.supports = []; S.thread = []; S.pendingImg = null; S.jobs = [];
+  const ref = projRef(id);
+  S.unsubs.push(ref.collection("supports").onSnapshot(snap => {
+    S.supports = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    if (S.tab === "supports") renderSupportsList();
+  }, () => {}));
+  S.unsubs.push(filRef(id).onSnapshot(snap => {
+    if (S.busy) return;
+    const turns = (snap.exists && snap.data().turns) || [];
+    const sig = t => t.length + ":" + (t.length ? t[t.length - 1].ts : 0);
+    if (sig(turns) !== sig(S.thread)) { S.thread = turns.slice(); if (S.tab === "seance") renderThread(); }
+  }, () => {}));
+  render();
+  window.scrollTo(0, 0);
+}
+function closeSubs() { S.unsubs.forEach(u => { try { u(); } catch {} }); S.unsubs = []; }
+function closeProject() { if (S.ctl) S.ctl.abort(); closeSubs(); S.current = null; S.view = "home"; render(); }
+
+function renderProjet() {
+  const p = proj(); if (!p) return closeProject();
+  $("#app").innerHTML = `<div class="phead" id="phead"></div><div id="panel"></div>
+    <div class="tabs" role="tablist">
+      ${[["seance", "Séance"], ["supports", "Supports"], ["plan", "Plan"]].map(([k, l]) => `<button role="tab" data-a="tab" data-tab="${k}" aria-selected="${S.tab === k}">${l}</button>`).join("")}
+    </div><div id="tab"></div>`;
+  renderPHead(); renderPanel(); renderTab();
+}
+function renderPHead() {
+  const p = proj(); const h = $("#phead"); if (!p || !h) return;
+  h.innerHTML = `<div class="meta"><span class="chip">${esc((TYPES[p.type] || TYPES.autre).nom)}</span>${p.matiere ? `<span>${esc(p.matiere)}</span>` : ""}${dueChip(p)}</div>
+    ${p.objectif ? `<p style="margin:0;color:var(--muted);font-size:.92rem">${esc(p.objectif.length > 220 ? p.objectif.slice(0, 220) + "…" : p.objectif)}</p>` : ""}
+    ${p.focus ? `<p style="margin:0;font-size:.92rem"><b>Facette :</b> ${esc(p.focus)}</p>` : ""}
+    ${progressHtml(p)}
+    ${familyHtml(p)}
+    <div class="actions">
+      <button class="btn" data-a="panel" data-panel="evolve" aria-expanded="${S.panel === "evolve"}">Faire évoluer</button>
+      <button class="btn" data-a="panel" data-panel="sub" aria-expanded="${S.panel === "sub"}">Créer un sous-projet</button>
+    </div>`;
+}
+function familyHtml(p) {
+  const parent = p.parentId ? S.projets.find(x => x.id === p.parentId) : null;
+  const ch = kids(p.id);
+  let h = "";
+  if (parent) h += `<div class="family"><span>Sous-projet de</span><button data-a="open" data-id="${esc(parent.id)}">${esc(parent.titre)}</button></div>`;
+  if (ch.length) h += `<div class="family"><span>Sous-projets :</span>${ch.map(c => `<button data-a="open" data-id="${esc(c.id)}">${esc(c.titre)}</button>`).join("")}</div>`;
+  return h;
+}
+function typeRadios(name, current, exclude) {
+  return `<div class="types" role="radiogroup">${Object.entries(TYPES).filter(([k]) => !exclude.includes(k)).map(([k, t], i) => `
+    <label class="type"><input type="radio" name="${name}" id="${name}-${k}" value="${k}" ${(current ? current === k : i === 0) ? "checked" : ""}><span><b>${t.nom}</b><small>${t.desc}</small></span></label>`).join("")}</div>`;
+}
+function renderPanel() {
+  const box = $("#panel"); if (!box) return;
+  const p = proj(); if (!p || !S.panel) { box.innerHTML = ""; return; }
+  const tn = (TYPES[p.type] || TYPES.autre).nom;
+  if (S.panel === "evolve") {
+    box.innerHTML = `<form class="panel" id="evform" novalidate>
+      <h2>Faire évoluer le projet</h2>
+      <p class="hint">Le projet passe d'une forme à une autre (actuellement : ${esc(tn)}). Tes supports, ton plan et ta conversation sont conservés, et Claude adapte sa façon de t'accompagner.</p>
+      <div class="field"><span class="lbl">Nouvelle forme</span>${typeRadios("evtype", null, [p.type])}</div>
+      <div class="field"><label for="ev-obj">Objectif mis à jour (facultatif)</label>
+        <textarea id="ev-obj" rows="3" maxlength="2000">${esc(p.objectif || "")}</textarea></div>
+      <div class="row"><button class="btn primary" type="submit">Faire évoluer</button><button class="btn" type="button" data-a="panel" data-panel="">Annuler</button></div>
+    </form>`;
+    $("#evform").addEventListener("submit", evolve);
+  } else {
+    const hasThread = S.thread.some(t => t.role === "assistant");
+    box.innerHTML = `<form class="panel" id="subform" novalidate>
+      <h2>Créer un sous-projet</h2>
+      <p class="hint">Un projet séparé, concentré sur une seule facette de « ${esc(p.titre)} ». Il reprend ses supports et reste rattaché à lui.</p>
+      <div class="field"><span class="lbl">Forme du sous-projet</span>${typeRadios("subtype", p.type === "exercices" ? "quiz" : "exercices", ["autre"])}</div>
+      <div class="field"><label for="sub-focus">Sur quoi se concentrer ?</label>
+        <p class="hint">Un chapitre, une notion, un type d'exercice… Laisse vide pour tout le contenu du projet.</p>
+        <input type="text" id="sub-focus" maxlength="120" placeholder="ex. Intégration par parties uniquement"></div>
+      <div class="field"><label for="sub-titre">Nom du sous-projet</label>
+        <input type="text" id="sub-titre" maxlength="80" placeholder="Laisse vide pour un nom automatique"></div>
+      <label class="checkrow" for="sub-sup"><input type="checkbox" id="sub-sup" checked><span>Reprendre les supports actifs du projet (${S.supports.filter(s => s.actif !== false).length})</span></label>
+      ${hasThread && S.sample ? `<label class="checkrow" for="sub-sum"><input type="checkbox" id="sub-sum" checked><span>Transmettre un résumé de la séance en cours (ce que tu as déjà vu, tes difficultés)</span></label>` : ""}
+      <p class="err" id="sub-err" hidden></p>
+      <div class="row"><button class="btn primary" type="submit" id="sub-go">Créer le sous-projet</button><button class="btn" type="button" data-a="panel" data-panel="">Annuler</button></div>
+    </form>`;
+    $("#subform").addEventListener("submit", createSub);
+  }
+}
+async function evolve(ev) {
+  ev.preventDefault();
+  const p = proj(); const id = p.id;
+  const nv = (document.querySelector('input[name="evtype"]:checked') || {}).value; if (!nv) return;
+  const de = p.type; const objectif = $("#ev-obj").value.trim();
+  const evolutions = [...(p.evolutions || []), { de, vers: nv, date: Date.now() }];
+  Object.assign(p, { type: nv, objectif, evolutions });
+  await write(projRef(id), () => projRef(id).update({ type: nv, objectif, evolutions, updatedAt: Date.now() }));
+  const evt = { role: "event", content: `Le projet est passé de « ${(TYPES[de] || TYPES.autre).nom} » à « ${TYPES[nv].nom} »`, ts: Date.now() };
+  S.thread.push(evt);
+  const ref = filRef(id); const th = S.thread;
+  write(ref, () => ref.set({ turns: storeTurns(th) }));
+  S.panel = null; renderProjet();
+  toast(`Projet passé en ${TYPES[nv].nom}. Pense à refaire le plan si besoin.`);
+}
+async function createSub(ev) {
+  ev.preventDefault();
+  const p = proj(); const btn = $("#sub-go");
+  const type = (document.querySelector('input[name="subtype"]:checked') || {}).value || "exercices";
+  const focus = $("#sub-focus").value.trim();
+  const titre = $("#sub-titre").value.trim() || `${TYPES[type].nom}${focus ? " : " + focus : ""} (${p.titre})`.slice(0, 80);
+  const takeSup = $("#sub-sup").checked; const doSum = $("#sub-sum") && $("#sub-sum").checked;
+  btn.disabled = true; btn.textContent = "Création…";
+  const ref = S.colP.doc();
+  const full = { titre, type, matiere: p.matiere || "", focus, parentId: p.id, echeance: p.echeance || "",
+    objectif: `Sous-projet de « ${p.titre} »${focus ? `, concentré sur : ${focus}` : ""}.${p.objectif ? ` Objectif du projet principal : ${p.objectif}` : ""}`.slice(0, 2000),
+    plan: [], nbSupports: 0, createdAt: Date.now(), updatedAt: Date.now() };
+  try {
+    await ref.set(full);
+    let n = 0;
+    if (takeSup) for (const s of S.supports.filter(s => s.actif !== false)) {
+      const d = { nom: s.nom, kind: s.kind, texte: s.texte || "", actif: true, herite: true, createdAt: Date.now() + n };
+      if (s.pages) d.pages = s.pages; if (s.tronque) d.tronque = true; if (s.url) d.url = s.url;
+      await ref.collection("supports").doc().set(d); n++;
+    }
+    if (doSum) {
+      btn.textContent = "Claude résume la séance…";
+      try {
+        const convo = S.thread.filter(t => t.role !== "event").map(t => (t.role === "user" ? "Étudiant : " : "Tuteur : ") + t.content).join("\n\n").slice(-120000);
+        const r = await S.sample("Voici une séance de travail entre un étudiant et son tuteur sur le projet « " + p.titre + " ».\n\n" + convo +
+          "\n\n---\nRésume en français, en 8 à 15 puces courtes : les notions déjà vues, ce que l'étudiant a compris, ses difficultés et erreurs récurrentes, et ce qui reste à travailler" +
+          (focus ? ", en insistant sur ce qui concerne : " + focus : "") + ". Pas d'introduction.", { modelTier: "default", cache: false });
+        await ref.collection("supports").doc().set({ nom: "Résumé de la séance du projet principal", kind: "note", texte: r.text.slice(0, SUPPORT_MAX), actif: true, createdAt: Date.now() + n + 1 });
+        n++;
+      } catch (e) { toast("Résumé non transmis : " + errMsg(e), 6000); }
+    }
+    if (n) await ref.update({ nbSupports: n });
+    full.nbSupports = n;
+    if (!S.projets.some(x => x.id === ref.id)) S.projets.unshift({ id: ref.id, ...full });
+    S.panel = null;
+    openProject(ref.id, "seance");
+    toast("Sous-projet créé.");
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Créer le sous-projet";
+    const er = $("#sub-err"); er.textContent = e && e.code === "quota_exceeded" ? "Espace de stockage plein : supprime d'anciens supports." : "La création a échoué. Réessaie."; er.hidden = false;
+  }
+}
+function renderTab() {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)));
+  if (S.tab === "seance") renderSeance();
+  else if (S.tab === "supports") renderSupports();
+  else renderPlan();
+}
+
+/* ---------- Contexte envoyé à Claude ---------- */
+function projectContext(p, budget = CTX_BUDGET) {
+  const t = TYPES[p.type] || TYPES.autre;
+  const n = daysLeft(p.echeance);
+  const lines = [
+    "# Projet de l'étudiant",
+    `Date du jour : ${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`,
+    `Titre : ${p.titre}`, `Type : ${t.nom}`,
+    p.matiere ? `Matière : ${p.matiere}` : "",
+    p.objectif ? `Objectif et contexte : ${p.objectif}` : "",
+    p.echeance ? `Échéance : ${p.echeance}${n !== null ? ` (${n >= 0 ? "dans " + n + " jour(s)" : "dépassée"})` : ""}` : ""
+  ].filter(Boolean);
+  if (p.focus) lines.push(`Facette à travailler (sous-projet) : ${p.focus}. Reste concentré sur cette facette sauf si l'étudiant demande autre chose.`);
+  const parent = p.parentId ? S.projets.find(x => x.id === p.parentId) : null;
+  if (parent) lines.push(`Projet principal : « ${parent.titre} » (${(TYPES[parent.type] || TYPES.autre).nom})${parent.objectif ? ", objectif : " + parent.objectif : ""}`);
+  if (Array.isArray(p.evolutions) && p.evolutions.length) lines.push("Évolution du projet : " + p.evolutions.map(e => `${(TYPES[e.de] || TYPES.autre).nom} → ${(TYPES[e.vers] || TYPES.autre).nom} le ${new Date(e.date).toLocaleDateString("fr-FR")}`).join(" ; ") + ". Adapte-toi à la forme actuelle.");
+  const plan = Array.isArray(p.plan) ? p.plan : [];
+  if (plan.length) lines.push("", "Plan de travail :", ...plan.map((s, i) => `${i + 1}. [${s.fait ? "fait" : "à faire"}] ${s.titre}`));
+  const sup = S.supports.filter(s => s.actif !== false && s.texte);
+  if (sup.length) {
+    const total = sup.reduce((a, s) => a + s.texte.length, 0);
+    const k = total > budget ? budget / total : 1;
+    lines.push("", "# Supports de cours fournis par l'étudiant");
+    for (const s of sup) {
+      const cut = Math.floor(s.texte.length * k);
+      lines.push("", `## ${s.nom} (${s.kind === "pdf" ? "PDF" : s.kind === "image" ? "photo" : "note"})`, s.texte.slice(0, cut) + (cut < s.texte.length ? "\n[… suite tronquée]" : ""));
+    }
+  } else lines.push("", "(Aucun support de cours fourni pour l'instant.)");
+  return lines.join("\n");
+}
+
+/* ---------- Séance ---------- */
+function renderSeance() {
+  const p = proj(); const t = TYPES[p.type] || TYPES.autre;
+  const canAsk = !!S.sample;
+  const canImg = !!(S.limits && S.limits.images);
+  $("#tab").innerHTML = `
+    ${canAsk ? "" : `<div class="notice" style="margin-bottom:12px"><b>Mode copie.</b> Claude ne peut pas répondre directement dans ce carnet pour ton compte. Écris ta question : le carnet la prépare avec ton cours et ton type de séance, tu la colles dans Claude, puis tu peux coller la réponse ici pour la garder.</div>`}
+    ${!S.supports.length ? `<div class="notice" style="margin-bottom:12px">Astuce : ajoute tes cours dans l'onglet <b>Supports</b> pour que les explications suivent ton programme et tes notations.</div>` : ""}
+    <div class="thread" id="thread" aria-live="polite"></div>
+    <div class="composer">
+      <div class="quick">${t.quick.map(q => `<button type="button" data-a="quick" data-q="${esc(q)}">${esc(q.replace(/ : $/, "…"))}</button>`).join("")}</div>
+      <div class="pending-img" id="pimg" hidden></div>
+      <div class="inputrow">
+        ${canImg ? `<label class="btn iconbtn" title="Joindre une photo" for="chatimg"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="sr">Joindre une photo</span></label><input type="file" id="chatimg" accept="image/*" hidden>` : ""}
+        <label for="msg" class="sr">Ton message</label>
+        <textarea id="msg" rows="1" placeholder="${canAsk ? "Pose ta question…" : "Ta question pour Claude…"}"></textarea>
+        <button class="btn primary iconbtn" id="sendbtn" data-a="send" aria-label="${canAsk ? "Envoyer" : "Préparer pour Claude"}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>
+      </div>
+      <div class="toggles">
+        ${canAsk ? `<label for="deep"><input type="checkbox" id="deep" ${S.deep ? "checked" : ""}> Mode approfondi</label>` : "<span></span>"}
+        <button class="btn ghost" data-a="clear-thread" style="min-height:32px;padding:4px 10px;font-size:.82rem;white-space:nowrap">Effacer la conversation</button>
+      </div>
+    </div>`;
+  const ta = $("#msg");
+  ta.addEventListener("input", autosize);
+  ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && window.matchMedia("(pointer:fine)").matches) { e.preventDefault(); send(); } });
+  if ($("#deep")) $("#deep").addEventListener("change", e => { S.deep = e.target.checked; });
+  const ci = $("#chatimg");
+  if (ci) ci.addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    S.pendingImg = { blob: await shrinkImage(f), url: null };
+    S.pendingImg.url = URL.createObjectURL(S.pendingImg.blob);
+    renderPendingImg();
+  });
+  renderPendingImg(); renderThread();
+  if (S.busy) setBusy(true);
+}
+function autosize() { const ta = $("#msg"); if (!ta) return; ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 180) + "px"; }
+function renderPendingImg() {
+  const box = $("#pimg"); if (!box) return;
+  if (!S.pendingImg) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `<img src="${S.pendingImg.url}" alt="Photo jointe"><span>Photo jointe à ton prochain message</span><button class="btn ghost" data-a="drop-img" style="min-height:30px;padding:2px 10px">Retirer</button>`;
+}
+const msgCache = new Map();
+function msgNode(turn) {
+  const key = turn.role + ":" + turn.ts;
+  if (msgCache.has(key)) return msgCache.get(key);
+  const d = document.createElement("div");
+  d.className = "msg " + turn.role;
+  if (turn.role === "event") {
+    d.className = "evt"; d.textContent = turn.content;
+  } else if (turn.role === "user") {
+    d.innerHTML = `<div class="bubble">${turn.img ? `<img class="thumb" src="${esc(turn.img)}" alt="Photo envoyée">` : turn.hadImg ? `<em>[photo jointe]</em>\n` : ""}${esc(turn.content)}</div>`;
+  } else {
+    d.innerHTML = `<span class="who">Claude</span><div class="bubble md">${renderMd(turn.content)}</div>`;
+    d.dataset.tx = "0";
+  }
+  msgCache.set(key, d);
+  return d;
+}
+function renderThread() {
+  const th = $("#thread"); if (!th) return;
+  th.replaceChildren(...S.thread.map(msgNode));
+  th.querySelectorAll('.msg[data-tx="0"]').forEach(n => { n.dataset.tx = "1"; typeset(n); });
+  if (!S.thread.length) {
+    const p = proj();
+    th.innerHTML = `<div class="notice">Séance <b>${esc((TYPES[p.type] || TYPES.autre).nom.toLowerCase())}</b> prête. Pose une question, utilise un raccourci ci-dessous ou joins la photo d'un exercice.</div>`;
+  }
+  if (S.streamEl) th.appendChild(S.streamEl);
+  if (S.copyEl) th.appendChild(S.copyEl);
+}
+function setBusy(b) {
+  S.busy = b;
+  const btn = $("#sendbtn"); if (!btn) return;
+  btn.dataset.a = b ? "stop" : "send";
+  btn.setAttribute("aria-label", b ? "Arrêter" : "Envoyer");
+  btn.innerHTML = b ? `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>`
+    : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>`;
+}
+function nearBottom() { return window.innerHeight + window.scrollY >= document.body.scrollHeight - 160; }
+function storeTurns(turns) {
+  let t = turns.slice(-60);
+  while (t.length > 2 && bytes(JSON.stringify(t)) > 180000) t = t.slice(2);
+  return t;
+}
+async function send() {
+  if (!S.sample) return copyFlow();
+  if (S.busy) return;
+  const ta = $("#msg"); const text = ta.value.trim();
+  if (!text && !S.pendingImg) return;
+  const p = proj(); const pid = p.id; const t = TYPES[p.type] || TYPES.autre;
+  const thread = S.thread;
+  setBusy(true);
+  const img = S.pendingImg; S.pendingImg = null; renderPendingImg();
+  ta.value = ""; autosize();
+  const userTurn = { role: "user", content: text || "Voici une photo : aide-moi avec son contenu.", ts: Date.now() };
+  if (img) {
+    userTurn.hadImg = true;
+    if (S.assets) { try { const a = await S.assets.upload(img.blob); userTurn.img = a.url; } catch {} }
+    if (!userTurn.img) msgCache.set("user:" + userTurn.ts, (() => { const d = document.createElement("div"); d.className = "msg user"; d.innerHTML = `<div class="bubble"><img class="thumb" src="${img.url}" alt="Photo envoyée">${esc(userTurn.content)}</div>`; return d; })());
+  }
+  thread.push(userTurn);
+  renderThread();
+  const ref = filRef(pid);
+  write(ref, () => ref.set({ turns: storeTurns(thread) }));
+
+  // Construction de la requête
+  const head = RULES + "\n\n" + t.mode + "\n\n" + projectContext(p);
+  let room = INPUT_BUDGET - bytes(head) - 2000;
+  const convo = [];
+  for (let i = thread.length - 1; i >= 0; i--) {
+    const turn = thread[i];
+    if (turn.role === "event") continue;
+    const c = (turn.hadImg && i !== thread.length - 1 ? "[L'étudiant avait joint une photo à ce message.]\n" : "") + turn.content;
+    const b = bytes(c); if (b > room) break; room -= b;
+    convo.unshift({ role: turn.role, content: c });
+  }
+  while (convo.length && convo[0].role !== "user") convo.shift();
+  const input = [{ role: "user", content: head + "\n\n---\nLa conversation avec l'étudiant commence ci-dessous." }, ...convo];
+
+  S.streamEl = document.createElement("div");
+  S.streamEl.className = "msg assistant";
+  S.streamEl.innerHTML = `<span class="who">Claude</span><div class="bubble md"><p class="thinking">Claude réfléchit…</p></div>`;
+  renderThread();
+  S.streamEl.scrollIntoView({ block: "end", behavior: "smooth" });
+  const bubble = S.streamEl.querySelector(".bubble");
+  let last = 0, pending = null, latest = "";
+  const paint = () => { pending = null; last = Date.now(); const stick = nearBottom(); bubble.innerHTML = renderMd(latest); if (stick) window.scrollTo(0, document.body.scrollHeight); };
+  S.ctl = new AbortController();
+  const opts = { cache: false, signal: S.ctl.signal, modelTier: S.deep ? "complex" : "default",
+    onText: ({ text }) => { latest = text; if (!pending) pending = setTimeout(paint, Math.max(0, 140 - (Date.now() - last))); } };
+  if (img) opts.images = [img.blob];
+  let answer = null, note = "";
+  try {
+    const r = await S.sample(input, opts);
+    answer = r.text; if (r.truncated) note = "\n\n*(Réponse coupée : demande la suite.)*";
+  } catch (e) {
+    if (e && e.text) { answer = e.text; note = e.code === "cancelled" ? "\n\n*(Réponse arrêtée.)*" : "\n\n*(Réponse interrompue.)*"; }
+    if (!e || e.code !== "cancelled") toast(errMsg(e), 6000);
+  }
+  clearTimeout(pending);
+  S.streamEl = null; S.ctl = null;
+  if (img && img.url && userTurn.img) URL.revokeObjectURL(img.url);
+  if (answer) thread.push({ role: "assistant", content: answer + note, ts: Date.now() });
+  setBusy(false);
+  if (S.current === pid) { renderThread(); }
+  write(ref, () => ref.set({ turns: storeTurns(thread) }));
+  write(projRef(pid), () => projRef(pid).update({ updatedAt: Date.now() }));
+}
+
+/* ---------- Mode copie (Claude indisponible dans le carnet) ---------- */
+function copyFlow() {
+  const ta = $("#msg"); const text = ta.value.trim();
+  if (!text) { toast("Écris d'abord ta question."); return; }
+  const p = proj(); const t = TYPES[p.type] || TYPES.autre; const thread = S.thread;
+  const earlier = thread.filter(x => x.role !== "event").slice(-6)
+    .map(x => (x.role === "user" ? "Étudiant : " : "Tuteur : ") + x.content).join("\n\n").slice(-15000);
+  thread.push({ role: "user", content: text, ts: Date.now() });
+  const ref = filRef(p.id); write(ref, () => ref.set({ turns: storeTurns(thread) }));
+  ta.value = ""; autosize();
+  S.copyPrompt = RULES_CHAT + "\n\n" + t.mode + "\n\n" + projectContext(p, 60000) +
+    (earlier ? "\n\n# Échanges précédents de la séance\n" + earlier : "") +
+    "\n\n---\nQuestion de l'étudiant : " + text;
+  const d = document.createElement("div");
+  d.className = "msg assistant"; d.id = "copypanel";
+  d.innerHTML = `<span class="who">Préparé pour Claude</span><div class="bubble" style="display:grid;gap:10px">
+    <div><b>1.</b> <button class="btn primary" data-a="copy-prompt">Copier la demande</button></div>
+    <div><b>2.</b> <a href="https://claude.ai/new" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">Ouvrir Claude</a> et colle la demande dans une nouvelle conversation.</div>
+    <div><b>3.</b> Facultatif : colle ici la réponse de Claude pour la garder dans ta séance.</div>
+    <label for="pasteback" class="sr">Réponse de Claude</label>
+    <textarea id="pasteback" rows="4" placeholder="Colle la réponse de Claude…"></textarea>
+    <div class="row"><button class="btn" data-a="add-answer">Ajouter la réponse</button><button class="btn ghost" data-a="close-copy">Fermer</button></div>
+    <details id="promptdetails"><summary style="cursor:pointer;color:var(--accent);font-weight:700;font-size:.88rem">Voir la demande préparée</summary>
+      <label for="promptbox" class="sr">Demande préparée</label>
+      <textarea id="promptbox" rows="8" readonly style="margin-top:8px;font-size:.82rem"></textarea></details>
+  </div>`;
+  d.querySelector("#promptbox").value = S.copyPrompt;
+  S.copyEl = d; renderThread();
+  d.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+async function copyPrompt() {
+  const text = S.copyPrompt || "";
+  try { await navigator.clipboard.writeText(text); toast("Demande copiée. Colle-la dans Claude."); return; } catch {}
+  const box = $("#promptbox"); const det = $("#promptdetails");
+  if (det) det.open = true;
+  if (box) { box.focus(); box.select(); try { if (document.execCommand("copy")) { toast("Demande copiée. Colle-la dans Claude."); return; } } catch {} }
+  toast("Copie automatique impossible : le texte est sélectionné, copie-le à la main.", 7000);
+}
+function closeCopy() { S.copyEl = null; S.copyPrompt = null; renderThread(); }
+
+/* ---------- Supports ---------- */
+function renderSupports() {
+  const canImg = !!(S.limits && S.limits.images);
+  $("#tab").innerHTML = `
+    <div class="drop" id="drop">
+      <div><b>Ajouter des supports de cours</b><p class="hint" style="margin:4px 0 0;color:var(--muted);font-size:.88rem">PDF de cours, photos de tes notes ou du tableau. Le texte est extrait une seule fois puis réutilisé à chaque séance.${canImg ? "" : " (La lecture des photos par Claude n'est pas disponible dans cette vue.)"}</p></div>
+      <div class="row">
+        <label class="btn primary" for="supfile">Choisir des fichiers</label>
+        <input type="file" id="supfile" accept="application/pdf,image/*" multiple hidden>
+        <span style="color:var(--muted);font-size:.85rem">ou glisse-les ici</span>
+      </div>
+      <details><summary style="cursor:pointer;color:var(--accent);font-weight:700;font-size:.9rem">Écrire une note</summary>
+        <div style="display:grid;gap:8px;margin-top:10px">
+          <label for="note-nom" class="sr">Titre de la note</label><input type="text" id="note-nom" placeholder="Titre de la note" maxlength="80">
+          <label for="note-txt" class="sr">Contenu de la note</label><textarea id="note-txt" rows="5" placeholder="Colle ou écris ici une partie de ton cours, des consignes, une remarque du prof…"></textarea>
+          <div><button class="btn" data-a="add-note">Ajouter la note</button></div>
+        </div></details>
+    </div>
+    <div class="jobs" id="jobs" style="margin:12px 0"></div>
+    <div class="section-head"><h2>Supports du projet</h2></div>
+    <div class="cards" id="suplist"></div>`;
+  $("#supfile").addEventListener("change", e => { const fs = [...e.target.files]; e.target.value = ""; addFiles(fs); });
+  const drop = $("#drop");
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); addFiles([...e.dataTransfer.files]); });
+  renderJobs(); renderSupportsList();
+}
+function renderJobs() {
+  const j = $("#jobs"); if (!j) return;
+  j.innerHTML = S.jobs.map(x => `<div class="job ${x.bad ? "bad" : ""}">${x.bad ? "" : `<span class="spin" aria-hidden="true"></span>`}<span>${esc(x.nom)} : ${esc(x.etat)}</span></div>`).join("");
+}
+function renderSupportsList() {
+  const l = $("#suplist"); if (!l) return;
+  if (!S.supports.length) { l.innerHTML = `<div class="notice">Aucun support pour l'instant. Ajoute tes PDF, photos ou notes pour personnaliser les séances.</div>`; return; }
+  l.innerHTML = S.supports.map(s => `
+    <div class="card sup">
+      <div class="sup-head"><span class="kind">${s.kind === "pdf" ? "PDF" : s.kind === "image" ? "PHOTO" : "NOTE"}</span>
+        <div class="t"><b>${esc(s.nom)}</b><span class="meta">${words(s.texte)} mots${s.pages ? ` · ${s.pages} pages` : ""}${s.tronque ? " · texte tronqué" : ""}</span></div></div>
+      <div class="row" style="font-size:.88rem">
+        <label for="act-${esc(s.id)}" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="act-${esc(s.id)}" data-a="toggle-sup" data-id="${esc(s.id)}" ${s.actif !== false ? "checked" : ""}> Utiliser en séance</label>
+        ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">Ouvrir l'original</a>` : ""}
+        <span style="flex:1"></span><button class="btn danger" style="min-height:32px;padding:4px 12px" data-a="del-sup" data-id="${esc(s.id)}">Supprimer</button>
+      </div>
+      <details><summary>Voir le texte extrait</summary><pre>${esc((s.texte || "").slice(0, 6000))}${(s.texte || "").length > 6000 ? "\n…" : ""}</pre></details>
+    </div>`).join("");
+}
+async function addSupport(pid, data) {
+  const ref = projRef(pid).collection("supports").doc();
+  await write(ref, () => ref.set({ actif: true, createdAt: Date.now(), ...data }));
+  recount(pid);
+}
+async function recount(pid) {
+  try {
+    const snap = await projRef(pid).collection("supports").get();
+    const p = S.projets.find(x => x.id === pid); if (p) p.nbSupports = snap.size;
+    write(projRef(pid), () => projRef(pid).update({ nbSupports: snap.size, updatedAt: Date.now() }));
+  } catch {}
+}
+async function upload(blob) {
+  if (!S.assets) return {};
+  try { const a = await S.assets.upload(blob); return { assetId: a.id, url: a.url }; } catch { return {}; }
+}
+async function transcribe(blobs, nom) {
+  const r = await S.sample(
+    `Transcris fidèlement le contenu de ${blobs.length > 1 ? "ces images (pages successives)" : "cette image"} d'un support de cours intitulé « ${nom} ». ` +
+    "Recopie le texte tel quel, les formules en LaTeX entre \\( \\) ou \\[ \\], les tableaux en Markdown. Décris chaque schéma ou figure en une ou deux phrases entre crochets, ex. [Schéma : …]. N'ajoute ni commentaire ni explication.",
+    { images: blobs, modelTier: "default" });
+  return r.text;
+}
+async function addFiles(files) {
+  const pid = S.current;
+  for (const f of files) {
+    const job = { nom: f.name, etat: "préparation…" }; S.jobs.push(job); renderJobs();
+    try {
+      if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+        job.etat = "lecture du PDF…"; renderJobs();
+        const pdfjs = await loadPdfJs();
+        const buf = await f.arrayBuffer();
+        const doc = await pdfjs.getDocument({ data: buf.slice(0) }).promise;
+        let txt = "";
+        for (let i = 1; i <= doc.numPages; i++) {
+          const page = await doc.getPage(i);
+          const c = await page.getTextContent();
+          txt += `\n[Page ${i}]\n` + c.items.map(it => it.str + (it.hasEOL ? "\n" : " ")).join("");
+          if (txt.length > SUPPORT_MAX * 1.2) break;
+        }
+        let pagesNote = "";
+        if (txt.replace(/\[Page \d+\]|\s/g, "").length < doc.numPages * 40) {
+          // PDF scanné : on fait lire les pages par Claude
+          if (!S.sample || !(S.limits && S.limits.images)) throw new Error("PDF scanné : la lecture d'images par Claude n'est pas disponible ici.");
+          const n = Math.min(doc.numPages, SCAN_MAX_PAGES); const per = Math.max(1, Math.min(S.limits.images.maxCount || 1, 5));
+          txt = "";
+          for (let i = 1; i <= n; i += per) {
+            const blobs = [];
+            for (let j = i; j < i + per && j <= n; j++) {
+              job.etat = `PDF scanné, lecture de la page ${j}/${n}…`; renderJobs();
+              const page = await doc.getPage(j);
+              const vp0 = page.getViewport({ scale: 1 }); const sc = Math.min(2.2, 1600 / vp0.width);
+              const vp = page.getViewport({ scale: sc });
+              const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+              await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+              blobs.push(await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85)));
+            }
+            txt += `\n[Pages ${i}–${Math.min(i + per - 1, n)}]\n` + await transcribe(blobs, f.name);
+          }
+          if (doc.numPages > n) pagesNote = `\n[Seules les ${n} premières pages ont été lues.]`;
+        }
+        job.etat = "enregistrement…"; renderJobs();
+        const up = await upload(f);
+        const tronque = txt.length > SUPPORT_MAX;
+        await addSupport(pid, { nom: f.name.replace(/\.pdf$/i, ""), kind: "pdf", texte: txt.slice(0, SUPPORT_MAX).trim() + pagesNote, pages: doc.numPages, tronque, ...up });
+      } else if (f.type.startsWith("image/")) {
+        if (!S.sample || !(S.limits && S.limits.images)) throw new Error("la lecture des photos par Claude n'est pas disponible ici.");
+        const blob = await shrinkImage(f);
+        job.etat = "Claude lit la photo…"; renderJobs();
+        const txt = await transcribe([blob], f.name);
+        job.etat = "enregistrement…"; renderJobs();
+        const up = await upload(blob);
+        await addSupport(pid, { nom: f.name.replace(/\.[a-z0-9]+$/i, ""), kind: "image", texte: txt.slice(0, SUPPORT_MAX), ...up });
+      } else throw new Error("format non pris en charge (PDF ou image uniquement).");
+      S.jobs = S.jobs.filter(x => x !== job);
+    } catch (e) {
+      job.bad = true; job.etat = e && e.code ? errMsg(e) : (e && e.message) || "échec du traitement.";
+      setTimeout(() => { S.jobs = S.jobs.filter(x => x !== job); renderJobs(); }, 9000);
+    }
+    renderJobs();
+  }
+}
+
+/* ---------- Plan ---------- */
+function renderPlan() {
+  const p = proj(); const plan = Array.isArray(p.plan) ? p.plan : [];
+  $("#tab").innerHTML = `
+    <div class="section-head"><h2>Plan de travail</h2>
+      ${S.sample ? `<button class="btn ${plan.length ? "" : "primary"}" data-a="gen-plan" id="genplan">${plan.length ? "Refaire avec Claude" : "Créer le plan avec Claude"}</button>` : ""}</div>
+    <p style="color:var(--muted);font-size:.9rem;margin:0 0 12px">Coche les étapes terminées : ta progression s'affiche sur le projet et Claude en tient compte pendant les séances.</p>
+    <div class="steps">${plan.length ? plan.map(s => `
+      <div class="step ${s.fait ? "done" : ""}">
+        <input type="checkbox" id="st-${esc(s.id)}" data-a="toggle-step" data-id="${esc(s.id)}" ${s.fait ? "checked" : ""}>
+        <label class="t" for="st-${esc(s.id)}"><b>${esc(s.titre)}</b>${s.detail ? `<small>${esc(s.detail)}</small>` : ""}</label>
+        <button class="x" data-a="del-step" data-id="${esc(s.id)}" aria-label="Supprimer l'étape">×</button>
+      </div>`).join("") : `<div class="notice">Pas encore de plan. Claude peut en proposer un à partir de ton objectif et de tes supports, ou ajoute tes étapes toi-même.</div>`}</div>
+    <form class="row" id="stepform" style="margin-top:12px">
+      <label for="newstep" class="sr">Nouvelle étape</label>
+      <input type="text" id="newstep" placeholder="Ajouter une étape…" maxlength="80" style="flex:1;min-width:180px">
+      <button class="btn" type="submit">Ajouter</button>
+    </form>`;
+  $("#stepform").addEventListener("submit", e => {
+    e.preventDefault(); const v = $("#newstep").value.trim(); if (!v) return;
+    savePlan([...(proj().plan || []), { id: uid(), titre: v, detail: "", fait: false }]);
+    $("#newstep").value = "";
+  });
+}
+function savePlan(plan) {
+  const p = proj(); p.plan = plan; const id = p.id;
+  write(projRef(id), () => projRef(id).update({ plan, updatedAt: Date.now() }));
+  renderPlan(); renderPHead();
+}
+async function genPlan(btn) {
+  const p = proj(); if (!S.sample) return;
+  btn.disabled = true; btn.textContent = "Claude prépare le plan…";
+  try {
+    const out = await S.sample.json(
+      RULES.split("\n")[0] + "\n\n" + projectContext(p, 40000) +
+      "\n\n---\nPropose un plan de travail réaliste en 4 à 10 étapes concrètes et ordonnées pour atteindre l'objectif de ce projet" +
+      (p.echeance ? ", en tenant compte de l'échéance" : "") + ", en t'appuyant sur les supports. " +
+      'Réponds uniquement avec un tableau JSON d\'objets {"titre": string (60 caractères max), "detail": string (150 caractères max)}. ' +
+      'Exemple : [{"titre":"Revoir les primitives usuelles","detail":"Tableau des primitives + 10 calculs rapides"}]',
+      { modelTier: "default", cache: false });
+    if (!Array.isArray(out) || !out.length) throw { code: "invalid_json" };
+    const old = new Map((p.plan || []).filter(s => s.fait).map(s => [s.titre.toLowerCase(), true]));
+    savePlan(out.slice(0, 12).map(s => ({ id: uid(), titre: String(s.titre || "").slice(0, 80), detail: String(s.detail || "").slice(0, 200), fait: !!old.get(String(s.titre || "").toLowerCase()) })).filter(s => s.titre));
+    toast("Plan créé. Coche les étapes au fur et à mesure.");
+  } catch (e) { toast(errMsg(e), 6000); renderPlan(); }
+}
+
+/* ---------- Actions ---------- */
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-a]"); if (!b) return;
+  const a = b.dataset.a;
+  if (a === "toggle-sup" || a === "toggle-step") return; // gérés par "change"
+  switch (a) {
+    case "logout": if (!armed(b)) break; window.carnetWeb.deconnexion(); break;
+    case "home": if (S.view === "form" && S.editId) { S.view = "projet"; S.editId = null; render(); } else closeProject(); break;
+    case "back-projet": S.view = "projet"; S.editId = null; render(); break;
+    case "new": closeSubs(); S.view = "form"; S.editId = null; S.current = null; render(); break;
+    case "open": openProject(b.dataset.id); break;
+    case "edit": S.editId = S.current; S.view = "form"; render(); break;
+    case "panel": S.panel = (b.dataset.panel && S.panel !== b.dataset.panel) ? b.dataset.panel : null; renderPHead(); renderPanel(); if (S.panel) $("#panel").scrollIntoView({ block: "nearest", behavior: "smooth" }); break;
+    case "tab": S.tab = b.dataset.tab; renderTab(); break;
+    case "quick": { const ta = $("#msg"); if (!ta) break; ta.value = b.dataset.q; autosize(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); if (!/ : $/.test(b.dataset.q)) send(); break; }
+    case "send": send(); break;
+    case "copy-prompt": copyPrompt(); break;
+    case "close-copy": closeCopy(); break;
+    case "add-answer": {
+      const v = ($("#pasteback") || {}).value; if (!v || !v.trim()) { toast("Colle d'abord la réponse de Claude."); break; }
+      const th = S.thread; th.push({ role: "assistant", content: v.trim(), ts: Date.now() });
+      const ref = filRef(); write(ref, () => ref.set({ turns: storeTurns(th) }));
+      closeCopy(); toast("Réponse ajoutée à ta séance."); break;
+    }
+    case "stop": if (S.ctl) S.ctl.abort(); break;
+    case "drop-img": if (S.pendingImg) URL.revokeObjectURL(S.pendingImg.url); S.pendingImg = null; renderPendingImg(); break;
+    case "clear-thread": if (!armed(b)) break; { const ref = filRef(); S.thread = []; msgCache.clear(); renderThread(); write(ref, () => ref.set({ turns: [] })); } break;
+    case "add-note": {
+      const nom = $("#note-nom").value.trim() || "Note"; const txt = $("#note-txt").value.trim();
+      if (!txt) { toast("Écris le contenu de la note."); break; }
+      await addSupport(S.current, { nom, kind: "note", texte: txt.slice(0, SUPPORT_MAX) });
+      $("#note-nom").value = ""; $("#note-txt").value = ""; toast("Note ajoutée."); break;
+    }
+    case "del-sup": {
+      if (!armed(b)) break;
+      const s = S.supports.find(x => x.id === b.dataset.id); if (!s) break;
+      const ref = projRef().collection("supports").doc(s.id);
+      await write(ref, () => ref.delete());
+      if (s.assetId && S.assets) S.assets.delete(s.assetId).catch(() => {});
+      recount(S.current); break;
+    }
+    case "del-step": savePlan((proj().plan || []).filter(s => s.id !== b.dataset.id)); break;
+    case "gen-plan": if ((proj().plan || []).length && !armed(b)) break; genPlan(b); break;
+    case "del-projet": {
+      if (!armed(b)) break;
+      const id = S.editId; const ref = projRef(id);
+      try {
+        const sups = await ref.collection("supports").get();
+        for (const d of sups.docs) { const s = d.data(); if (s.assetId && S.assets) S.assets.delete(s.assetId).catch(() => {}); await ref.collection("supports").doc(d.id).delete(); }
+        await filRef(id).delete(); await ref.delete();
+      } catch { toast("La suppression a échoué. Réessaie."); break; }
+      closeSubs(); S.editId = null; S.current = null; S.view = "home"; render(); toast("Projet supprimé."); break;
+    }
+  }
+});
+document.addEventListener("change", ev => {
+  const b = ev.target.closest("[data-a]"); if (!b) return;
+  if (b.dataset.a === "toggle-sup") {
+    const ref = projRef().collection("supports").doc(b.dataset.id);
+    write(ref, () => ref.update({ actif: b.checked }));
+  } else if (b.dataset.a === "toggle-step") {
+    savePlan((proj().plan || []).map(s => s.id === b.dataset.id ? { ...s, fait: b.checked } : s));
+  }
+});
+
+render();
+init();
+</script>
+</body>
+</html>

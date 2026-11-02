@@ -1,0 +1,7 @@
+{
+  "nom": "Note",
+  "kind": "note",
+  "texte": "Le prof insiste sur LIATE.",
+  "actif": false,
+  "createdAt": 1793309554343
+}
