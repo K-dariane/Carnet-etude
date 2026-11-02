@@ -1,6 +1,8 @@
 # Carnet d'étude — version web (Supabase)
 
 App web autonome pour les testeurs, sans compte Claude. En cours de construction, étape par étape.
+
+Projet Supabase : `https://xyrlifukufcntwinrtvz.supabase.co` (référence `xyrlifukufcntwinrtvz`). Configuration publique de l'app : `app/config.js`.
 La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 
 | Étape | État |
@@ -8,7 +10,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Schéma de la base, règles d'accès, import | Fait, testé |
 | Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
 | Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
-| Fichiers (Supabase Storage) | À faire |
+| Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
 | Connexion (lien e-mail, Google) | À faire |
 | Branchement de l'app | À faire |
 
@@ -73,12 +75,24 @@ C'est l'app qui écrit les consignes envoyées à Claude (`RULES`, modes). Un te
 
 Dans le tableau de bord Supabase :
 
-1. **SQL Editor** : exécuter les deux fichiers de `supabase/migrations/`, dans l'ordre.
+1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`).
 2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement.
 3. Déployer la fonction avec la CLI Supabase, depuis `app-etude/web` :
    ```bash
-   npx supabase functions deploy chat
+   npx supabase login
    ```
+   ```bash
+   npx supabase functions deploy chat --project-ref xyrlifukufcntwinrtvz
+   ```
+
+## Fichiers (Supabase Storage)
+
+`supabase/migrations/20261102000003_stockage.sql` crée le bucket privé `supports` (10 Mo par fichier ; JPEG, PNG, WebP, GIF, PDF).
+
+- Chaque testeur a son dossier `<uid>/…` : il ne peut lire, ajouter, renommer ou supprimer que ses fichiers.
+- Dans la base : `url` = `storage:supports/<chemin>` (adresse d'affichage, l'app en fera un lien temporaire) et `asset_id` = `<chemin>` pour le support qui possède le fichier.
+- Comme dans la V1, les copies d'un sous-projet ont une `url` mais pas d'`asset_id` : supprimer une copie ne supprime pas le fichier d'origine.
+- Limite connue : supprimer un compte ne supprime pas ses fichiers dans Storage (Supabase interdit de le faire en SQL). Il faudra les supprimer depuis le tableau de bord (Storage → supports → dossier du compte).
 
 ## Importer tes projets de l'artifact
 
@@ -93,7 +107,19 @@ Dans le tableau de bord Supabase :
    - Tout se fait dans une transaction : en cas d'erreur, rien n'est importé.
    - Tu peux le relancer : les projets déjà importés sont mis à jour, pas dupliqués.
 
-Les fichiers d'origine (photos, PDF) restent dans l'artifact pour l'instant : le **texte extrait** est importé, c'est lui que l'IA utilise. Leur copie vers Supabase Storage se fera à l'étape « Fichiers ».
+### Avec les photos et PDF
+
+1. Récupère les fichiers de l'artifact dans un dossier, un fichier par `assetId` (`<assetId>.jpg`, `<assetId>.pdf`). Claude Code peut le faire.
+2. Téléverse-les dans ton dossier Storage (il faut ton uuid : Authentication → Users) :
+   ```bash
+   SUPABASE_SERVICE_ROLE_KEY=ta-cle node import/televerser.mjs --dossier chemin/vers/fichiers --owner ton-uuid
+   ```
+   La clé `service_role` donne tous les droits sur le projet : ne la mets jamais dans le code, dans le dépôt ou dans le chat.
+3. Génère le script d'import avec l'option `--fichiers` : les adresses `/_blob/…` de l'artifact sont remplacées par les adresses Storage.
+   ```bash
+   node import/import.mjs chemin/vers/export --email ton@adresse.com --fichiers chemin/vers/fichiers --out import/import.sql
+   ```
+   Un fichier absent est signalé. Son support est importé quand même, avec son texte.
 
 ## Tests
 
@@ -114,11 +140,12 @@ Ce que lance `npm test` :
 | `test/db.test.mjs` | Schéma, règles d'accès, quota (SQL), import |
 | `test/chat.test.mjs` | Fonction `chat` avec le vrai SDK et une fausse API Claude (modèles, cache, streaming, quota, erreurs, arrêt en cours de réponse) |
 | `test/chat.deno.test.ts` | La même fonction sous Deno, l'environnement réel des Edge Functions |
+| `test/televerser.test.mjs` | Téléversement des fichiers vers Storage (faux serveur) |
 
 Aucun test n'appelle la vraie API Claude : ils ne coûtent rien.
 
 Pour tester aussi l'import sur un vrai export (rien n'est envoyé ailleurs, la base de test est jetable) :
 
 ```bash
-IMPORT_REEL=chemin/vers/export npm test
+IMPORT_REEL=chemin/vers/export FICHIERS_REEL=chemin/vers/fichiers npm test
 ```

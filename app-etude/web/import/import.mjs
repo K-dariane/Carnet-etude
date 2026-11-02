@@ -12,6 +12,8 @@
 // Utilisation :
 //   node import.mjs <export> --email ton@adresse.com [--out import.sql]
 //   node import.mjs <export> --owner <uuid>          [--out import.sql]
+//   Option --fichiers <dossier> : les photos et PDF de l'artifact (<assetId>.<ext>), à téléverser avec
+//   televerser.mjs. Les adresses /_blob/<id> sont alors remplacées par « storage:supports/<uid>/import/<fichier> ».
 // Le compte doit déjà exister : connecte-toi une fois à l'app avant l'import.
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -56,6 +58,17 @@ export function collect(docs) {
   return { projets: [...projets.values()], ignores };
 }
 
+/* ---------- Fichiers (photos, PDF) ---------- */
+export const OWNER = "__OWNER__";   // remplacé par l'uuid du compte au moment de l'import SQL
+export const cheminImport = fichier => `${OWNER}/import/${fichier}`;
+/* Dossier de fichiers <assetId>.<ext> → Map assetId → nom de fichier. */
+export function listeFichiers(dir) {
+  const m = new Map();
+  for (const n of readdirSync(dir)) { const r = n.match(/^([0-9a-f]{32})\.[a-z0-9]+$/i); if (r) m.set(r[1].toLowerCase(), n); }
+  return m;
+}
+const blobId = u => (typeof u === "string" && (u.match(/\/_blob\/([0-9a-f]{32})(?:$|[?#])/i) || [])[1]?.toLowerCase()) || null;
+
 /* ---------- Conversion en lignes ---------- */
 const clean = v => typeof v === "string" ? v.replace(/\u0000/g, "")
   : Array.isArray(v) ? v.map(clean)
@@ -64,8 +77,10 @@ const extraOf = (d, cols) => Object.fromEntries(Object.entries(d).filter(([k]) =
 const ms = v => Number.isFinite(v) ? v : (typeof v === "string" && !isNaN(Date.parse(v)) ? Date.parse(v) : null);
 const dateOk = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
 
-export function toRows(collected) {
+export function toRows(collected, { fichiers } = {}) {
   const { projets } = collected; const notes = []; const ids = new Set(projets.map(p => p.id));
+  // Adresse d'un fichier de l'artifact dans Supabase Storage (null si le fichier n'a pas été fourni).
+  const versStorage = u => { const id = blobId(u); return id && fichiers.has(id) ? "storage:supports/" + cheminImport(fichiers.get(id)) : null; };
   const rows = { projets: [], supports: [], fils: [] };
   for (const p of projets) {
     const d = clean(p.data); const extra = extraOf(d, PROJET_COLS);
@@ -89,17 +104,34 @@ export function toRows(collected) {
     for (const s of p.supports) {
       const x = clean(s.data);
       if (!KINDS.includes(x.kind)) throw new Error(`Support ${s.id} du projet « ${d.titre} » : kind inconnu « ${x.kind} ».`);
+      const sx = extraOf(x, SUPPORT_COLS); let url = x.url ?? null; let assetId = x.assetId ?? null;
+      if (fichiers && (url || assetId)) {
+        const u = url ? (blobId(url) ? versStorage(url) : url) : null;   // une adresse qui n'est pas /_blob/ est gardée telle quelle
+        const a = assetId && fichiers.has(String(assetId).toLowerCase()) ? cheminImport(fichiers.get(String(assetId).toLowerCase())) : null;
+        if ((url && !u) || (assetId && !a)) {
+          notes.push(`Support « ${x.nom} » (projet « ${d.titre} ») : fichier introuvable, seul le texte est importé.`);
+          if (url && !u) sx.urlOrigine = url;
+          if (assetId && !a) sx.assetIdOrigine = assetId;
+        }
+        url = u ?? (a ? "storage:supports/" + a : null); assetId = a;
+      }
       rows.supports.push({
         id: s.id, projet_id: p.id, nom: x.nom ?? "", kind: x.kind, texte: x.texte ?? "", actif: x.actif !== false,
-        url: x.url ?? null, asset_id: x.assetId ?? null, pages: Number.isFinite(x.pages) ? x.pages : null,
+        url, asset_id: assetId, pages: Number.isFinite(x.pages) ? x.pages : null,
         tronque: typeof x.tronque === "boolean" ? x.tronque : null, herite: typeof x.herite === "boolean" ? x.herite : null,
-        extra: extraOf(x, SUPPORT_COLS), created_at: ms(x.createdAt) ?? created
+        extra: sx, created_at: ms(x.createdAt) ?? created
       });
     }
     for (const f of p.fils) {
       const x = clean(f.data);
       if (!Array.isArray(x.turns)) throw new Error(`Conversation ${f.id} du projet « ${d.titre} » : champ turns absent.`);
-      rows.fils.push({ projet_id: p.id, id: f.id, turns: x.turns, updated_at: ms(d.updatedAt) ?? created });
+      const turns = !fichiers ? x.turns : x.turns.map(t => {
+        if (!t || typeof t.img !== "string" || !blobId(t.img)) return t;
+        const u = versStorage(t.img); const { img, ...reste } = t;
+        if (!u) notes.push(`Conversation du projet « ${d.titre} » : photo jointe introuvable, retirée (le message est gardé).`);
+        return u ? { ...t, img: u } : { ...reste, imgOrigine: img };
+      });
+      rows.fils.push({ projet_id: p.id, id: f.id, turns, updated_at: ms(d.updatedAt) ?? created });
     }
   }
   // Les projets principaux avant leurs sous-projets (contrainte de clé étrangère).
@@ -116,6 +148,9 @@ export function toRows(collected) {
 /* ---------- Génération du SQL ---------- */
 const lit = v => v === null || v === undefined ? "null" : "'" + String(v).replace(/'/g, "''") + "'";
 const json = v => lit(JSON.stringify(v)) + "::jsonb";
+// Texte qui contient l'uuid du compte, connu seulement au moment de l'import.
+const litO = v => v != null && String(v).includes(OWNER) ? `replace(${lit(v)}, '${OWNER}', (select id::text from _import_owner))` : lit(v);
+const jsonO = v => JSON.stringify(v).includes(OWNER) ? `replace(${lit(JSON.stringify(v))}, '${OWNER}', (select id::text from _import_owner))::jsonb` : json(v);
 const ts = v => `to_timestamp(${Number(v)} / 1000.0)`;
 const bool = v => v === null ? "null" : v ? "true" : "false";
 const num = v => v === null ? "null" : String(Math.trunc(v));
@@ -140,12 +175,12 @@ export function toSql({ rows }, { email, owner }) {
   }
   for (const r of rows.supports) {
     L.push(`insert into public.supports (id, owner, projet_id, nom, kind, texte, actif, url, asset_id, pages, tronque, herite, extra, created_at) values (${[
-      lit(r.id), "(select id from _import_owner)", lit(r.projet_id), lit(r.nom), lit(r.kind), lit(r.texte), bool(r.actif), lit(r.url), lit(r.asset_id),
+      lit(r.id), "(select id from _import_owner)", lit(r.projet_id), lit(r.nom), lit(r.kind), lit(r.texte), bool(r.actif), litO(r.url), litO(r.asset_id),
       num(r.pages), bool(r.tronque), bool(r.herite), json(r.extra), ts(r.created_at)
     ].join(", ")})\n  on conflict (id) do update set projet_id = excluded.projet_id, nom = excluded.nom, kind = excluded.kind, texte = excluded.texte, actif = excluded.actif, url = excluded.url, asset_id = excluded.asset_id, pages = excluded.pages, tronque = excluded.tronque, herite = excluded.herite, extra = excluded.extra, created_at = excluded.created_at\n  where supports.owner = excluded.owner;`);
   }
   for (const r of rows.fils) {
-    L.push(`insert into public.fils (owner, projet_id, id, turns, updated_at) values ((select id from _import_owner), ${lit(r.projet_id)}, ${lit(r.id)}, ${json(r.turns)}, ${ts(r.updated_at)})\n  on conflict (projet_id, id) do update set turns = excluded.turns, updated_at = excluded.updated_at;`);
+    L.push(`insert into public.fils (owner, projet_id, id, turns, updated_at) values ((select id from _import_owner), ${lit(r.projet_id)}, ${lit(r.id)}, ${jsonO(r.turns)}, ${ts(r.updated_at)})\n  on conflict (projet_id, id) do update set turns = excluded.turns, updated_at = excluded.updated_at;`);
   }
   // Vérification finale : tout est bien chez le bon compte.
   const chk = (table, n, idCol = "id") => n ? `if (select count(*) from public.${table} where owner = (select id from _import_owner) and ${idCol} in (${rows[table].map(r => lit(table === "fils" ? r.projet_id + "/" + r.id : r.id)).join(", ")})) <> ${n} then raise exception 'Vérification ${table} échouée : import annulé.'; end if;` : "";
@@ -162,11 +197,11 @@ function main(argv) {
     if (a.startsWith("--")) args[a.slice(2)] = argv[++i]; else args._.push(a);
   }
   if (!args._[0]) {
-    console.error("Utilisation : node import.mjs <export (dossier ou .json)> --email ton@adresse.com [--out import.sql]");
+    console.error("Utilisation : node import.mjs <export (dossier ou .json)> --email ton@adresse.com [--fichiers <dossier>] [--out import.sql]");
     process.exit(2);
   }
   const { projets, ignores } = collect(readExport(args._[0]));
-  const conv = toRows({ projets });
+  const conv = toRows({ projets }, { fichiers: args.fichiers ? listeFichiers(args.fichiers) : undefined });
   const sql = toSql(conv, { email: args.email, owner: args.owner });
   if (args.out) writeFileSync(args.out, sql); else process.stdout.write(sql);
   const r = conv.rows;

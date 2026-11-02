@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startPg, psql } from "./pg.mjs";
-import { readExport, collect, toRows, toSql } from "../import/import.mjs";
+import { readExport, collect, toRows, toSql, listeFichiers } from "../import/import.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const web = join(here, "..");
@@ -160,6 +160,56 @@ test("données invalides : message clair", () => {
   assert.throws(() => toSql({ rows: { projets: [], supports: [], fils: [] } }, {}), /--email ou --owner/);
 });
 
+/* ---------- Fichiers (Storage) ---------- */
+test("stockage : bucket privé, chaque testeur ne touche qu'à son dossier", () => {
+  assert.equal(q("select public || ' ' || file_size_limit || ' ' || array_to_string(allowed_mime_types, ',') from storage.buckets where id = 'supports'"),
+    "false 10485760 image/jpeg,image/png,image/webp,image/gif,application/pdf");
+  q(`insert into storage.objects (bucket_id, name) values ('supports', '${A}/import/photo.jpg'), ('supports', '${A}/pa9/cours.pdf')`, { as: A });
+  q(`insert into storage.objects (bucket_id, name) values ('supports', '${B}/import/b.jpg')`, { as: B });
+  fails(`insert into storage.objects (bucket_id, name) values ('supports', '${B}/vol.jpg')`, { as: A }, /row-level security/);
+  fails(`insert into storage.objects (bucket_id, name) values ('supports', 'photo-sans-dossier.jpg')`, { as: A }, /row-level security/);
+  assert.equal(q("select count(*) from storage.objects", { as: A }), "2");
+  assert.equal(q("select count(*) from storage.objects", { as: B }), "1");
+  q(`update storage.objects set name = '${A}/renomme.jpg' where name like '${B}/%'; delete from storage.objects where name like '${B}/%'`, { as: A });
+  assert.equal(q(`select count(*) from storage.objects where name like '${B}/%'`), "1", "A ne peut ni renommer ni supprimer le fichier de B");
+  fails(`update storage.objects set name = '${B}/pris.jpg' where name = '${A}/pa9/cours.pdf'`, { as: A }, /row-level security/);
+  q(`delete from storage.objects where name = '${A}/pa9/cours.pdf'`, { as: A });
+  assert.equal(q("select count(*) from storage.objects", { as: A }), "1");
+  fails("select count(*) from storage.objects", { as: "anon" }, /permission denied/);
+});
+
+test("import avec fichiers : adresses /_blob/ remplacées par Storage, copies sans asset_id, fichiers absents signalés", () => {
+  const f1 = "11111111111111111111111111111111", f2 = "22222222222222222222222222222222", f3 = "33333333333333333333333333333333";
+  const docs = {
+    "data/users/x/carnet/projets/pfic0000000000000001": { titre: "Avec fichiers", type: "etude", createdAt: 1, updatedAt: 2 },
+    "data/users/x/carnet/projets/pfic0000000000000001/supports/sfic1": { nom: "photo", kind: "image", texte: "t1", url: `/_blob/${f1}`, assetId: f1 },
+    "data/users/x/carnet/projets/pfic0000000000000001/supports/sfic2": { nom: "cours perdu", kind: "pdf", texte: "t2", url: `/_blob/${f2}`, assetId: f2 },
+    "data/users/x/carnet/projets/pfic0000000000000001/fil/principal": { turns: [
+      { role: "user", content: "photo", hadImg: true, img: `/_blob/${f1}`, ts: 1 }, { role: "user", content: "autre", img: `/_blob/${f3}`, ts: 2 }] },
+    "data/users/x/carnet/projets/pfic0000000000000002": { titre: "Sous-projet", type: "quiz", parentId: "pfic0000000000000001", createdAt: 3, updatedAt: 4 },
+    "data/users/x/carnet/projets/pfic0000000000000002/supports/sfic3": { nom: "photo", kind: "image", texte: "t1", url: `/_blob/${f1}`, herite: true },
+  };
+  const conv = toRows(collect(docs), { fichiers: new Map([[f1, f1 + ".jpg"]]) });
+  assert.equal(conv.notes.filter(n => /introuvable/.test(n)).length, 2);
+  q(toSql(conv, { email: "a@test.cd" }));
+  const sup = id => JSON.parse(q(`select row_to_json(s) from supports s where id = '${id}'`, { as: A }));
+  const chemin = `${A}/import/${f1}.jpg`;
+  assert.equal(sup("sfic1").url, "storage:supports/" + chemin); assert.equal(sup("sfic1").asset_id, chemin);
+  assert.equal(sup("sfic3").url, "storage:supports/" + chemin); assert.equal(sup("sfic3").asset_id, null, "une copie ne possède pas le fichier");
+  assert.equal(sup("sfic2").url, null); assert.equal(sup("sfic2").asset_id, null); assert.equal(sup("sfic2").texte, "t2");
+  assert.deepEqual(sup("sfic2").extra, { urlOrigine: `/_blob/${f2}`, assetIdOrigine: f2 });
+  const turns = JSON.parse(q("select turns from fils where projet_id = 'pfic0000000000000001'", { as: A }));
+  assert.equal(turns[0].img, "storage:supports/" + chemin); assert.equal(turns[0].hadImg, true);
+  assert.equal(turns[1].img, undefined); assert.equal(turns[1].imgOrigine, `/_blob/${f3}`); assert.equal(turns[1].content, "autre");
+  // Sans --fichiers : rien n'est réécrit (comportement d'avant).
+  assert.equal(toRows(collect(docs)).rows.supports.find(r => r.id === "sfic1").url, `/_blob/${f1}`);
+});
+
+test("liste des fichiers : seuls les noms <assetId>.<ext> comptent", () => {
+  const m = listeFichiers(join(here, "fixtures/fichiers"));
+  assert.deepEqual([...m.entries()].sort(), [["d65927aa4753977e63d6b78677d0a79c", "d65927aa4753977e63d6b78677d0a79c.jpg"], ["ffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffff.pdf"]]);
+});
+
 /* ---------- Consommation IA et quota ---------- */
 test("semaine du quota : du lundi 00:00 au lundi suivant, heure de Kinshasa", () => {
   const debut = t => q(`select to_char(ia_debut_semaine('${t}'::timestamptz) at time zone 'Africa/Kinshasa', 'YYYY-MM-DD HH24:MI')`);
@@ -209,9 +259,13 @@ test("quota : valeurs refusées", () => {
   fails(`insert into ia_appels (owner, tache, modele, statut, output_tokens) values ('${A}', 'seance', 'x', 'ok', -5)`, { as: "service" }, /check/);
 });
 
-test("import d'un vrai export (si IMPORT_REEL est défini)", { skip: !process.env.IMPORT_REEL }, () => {
+test("import d'un vrai export (si IMPORT_REEL est défini, avec FICHIERS_REEL pour les photos et PDF)", { skip: !process.env.IMPORT_REEL }, () => {
   const c = collect(readExport(process.env.IMPORT_REEL));
-  const conv = toRows(c);
+  const conv = toRows(c, { fichiers: process.env.FICHIERS_REEL ? listeFichiers(process.env.FICHIERS_REEL) : undefined });
+  if (process.env.FICHIERS_REEL) {
+    assert.deepEqual(conv.notes.filter(n => /introuvable/.test(n)), [], "tous les fichiers référencés sont fournis");
+    assert.ok(conv.rows.supports.every(s => !s.url || s.url.startsWith("storage:supports/")), "plus aucune adresse /_blob/");
+  }
   q(`insert into auth.users (id, email) values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'reel@test.cd') on conflict do nothing`);
   q(toSql(conv, { email: "reel@test.cd" }));
   const D = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
