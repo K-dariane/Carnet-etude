@@ -25,7 +25,8 @@ La base de connaissances du projet claude.ai est vide. Ressources existantes :
   - `web/supabase/functions/chat/` et `_shared/chat.ts` : fonction serveur IA (clé Claude en secret, Haiku / Sonnet, streaming, quota).
   - `web/import/import.mjs` : import des projets de l'artifact (génère un script SQL).
   - `web/import/televerser.mjs` : copie des photos et PDF de l'artifact vers Supabase Storage.
-  - `web/app/config.js` : configuration publique (projet Supabase `xyrlifukufcntwinrtvz`).
+  - `web/app/index.html` : l'app web (copie de la V1, mêmes `RULES` et `TYPES`) ; `web/app/backend.js` : branchement Supabase (base, IA, fichiers, connexion) ; `web/app/config.js` : configuration publique (projet Supabase `xyrlifukufcntwinrtvz`).
+  - Une modification de la V1 (`carnet/index.html`) n'est pas reportée automatiquement dans `web/app/index.html`.
   - `web/test/` : tests (`npm install` puis `npm test` dans `web/` ; Postgres local, fausse API Claude, Deno).
 - `couts/modele.py` : modèle de coûts (IA par séance et par étudiant, coûts fixes, scénarios de prix).
 - Artifact « Carnet d'étude » : https://claude.ai/artifact/Mr8uMTEjFs1su6snCTDPhr (slug `a8d3168d-afef-460f-a726-8c73c818a0f9`), partagé publiquement.

@@ -1,0 +1,237 @@
+// Test de bout en bout de l'app web (Playwright + faux Supabase + fausse fonction « chat »).
+// Vérifie la connexion, l'enregistrement dans les tables avec les champs attendus, les fichiers et l'IA.
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const { chromium } = require("playwright");
+const here = dirname(fileURLToPath(import.meta.url));
+const web = join(here, "..");
+const nm = join(web, "node_modules");
+const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+
+let browser, ctx, pg, erreurs = [], appels = [], reponseChat = null;
+const REPONSE = "### Intégration par parties\nD'après ton cours *cours*, \\[ \\int u v' = [uv] - \\int u' v \\]\n- Résultat : \\(x e^x - e^x + C\\)";
+const ndjson = (texte, extra = {}) => texte.match(/[\s\S]{1,25}/g).map(d => JSON.stringify({ type: "texte", delta: d })).join("\n") + "\n" +
+  JSON.stringify({ type: "fin", text: texte, tronque: false, modele: "claude-haiku-5-5", tokens: 1234, quota: { utilise: 1234, limite: 500000, reinitialisation: "2026-11-09T00:00:00+01:00" }, ...extra }) + "\n";
+
+async function nouvellePage(context) {
+  const p = await context.newPage();
+  p.on("pageerror", e => erreurs.push("pageerror " + e.message));
+  p.on("console", m => { if (m.type() === "error" && !/ERR_FAILED|Failed to load resource/.test(m.text())) erreurs.push("console " + m.text()); });
+  return p;
+}
+async function contexte() {
+  const c = await browser.newContext({ viewport: { width: 400, height: 860 } });
+  await c.addInitScript({ path: join(here, "fake_supabase.js") });
+  await c.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
+  await c.route(/cdn\.jsdelivr\.net\/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/, r => {
+    const m = r.request().url().match(/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/);
+    r.fulfill({ path: join(nm, m[1], m[2]) });
+  });
+  // Enregistrée après la règle générale : Playwright essaie les règles de la plus récente à la plus ancienne.
+  await c.route(/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2\.118\.0\/dist\/umd\/supabase\.js/, r => r.fulfill({ body: "/* remplacé par le faux client */", contentType: "text/javascript" }));
+  await c.route("http://carnet.test/**", r => {
+    const f = new URL(r.request().url()).pathname.replace(/^\/$/, "/index.html");
+    if (f === "/config.js") return r.fulfill({ contentType: "text/javascript", body: 'window.CARNET_CONFIG = { supabaseUrl: "https://fake.supabase.test", supabaseAnonKey: "cle-publique-test" };' });
+    r.fulfill({ path: join(web, "app", f) });
+  });
+  await c.route("https://fake.supabase.test/storage/**", r => r.fulfill({ body: PNG, contentType: "image/png" }));
+  await c.route("https://fake.supabase.test/functions/v1/chat", async r => {
+    const body = JSON.parse(r.request().postData()); const headers = r.request().headers();
+    appels.push({ body, headers });
+    if (reponseChat) return reponseChat(r, body);
+    if (body.tache === "plan") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson('```json\n[{"titre":"Revoir les primitives","detail":"Tableau"},{"titre":"Formule IPP","detail":"Choisir u et v\'"},{"titre":"Exercices","detail":"10 calculs"}]\n```') });
+    if (body.tache === "resume") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("- Notions vues : IPP\n- Difficulté : choix de u") });
+    if (body.tache === "transcription") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("Théorème de Rolle : f(a) = f(b)") });
+    r.fulfill({ contentType: "application/x-ndjson", body: ndjson(REPONSE) });
+  });
+  return c;
+}
+const fake = () => pg.evaluate(() => window.__fake);
+const attendre = (fn, ms = 8000) => pg.waitForFunction(fn, null, { timeout: ms });
+
+before(async () => { browser = await chromium.launch(); ctx = await contexte(); pg = await nouvellePage(ctx); });
+after(async () => { await browser.close(); });
+
+test("connexion : écran affiché, e-mail vérifié, lien envoyé, code faux refusé, bon code accepté", async () => {
+  await pg.goto("http://carnet.test/");
+  await pg.waitForSelector("#login");
+  assert.match(await pg.textContent("#app"), /Pas besoin de compte Claude/);
+  await pg.fill("#login-email", "pas-une-adresse"); await pg.click("#login-send");
+  assert.equal(await pg.textContent("#login-err"), "Écris une adresse e-mail valide.");
+  await pg.fill("#login-email", "Moi@Test.cd"); await pg.click("#login-send");
+  await pg.waitForSelector("#login-code:not([hidden])");
+  assert.match(await pg.textContent("#login-sent"), /Lien envoyé à moi@test\.cd/);
+  let f = await fake();
+  assert.deepEqual(f.emails, [{ email: "moi@test.cd", redirect: "http://carnet.test/" }]);
+  assert.equal(f.client.key, "cle-publique-test"); assert.equal(f.client.flowType, "implicit");
+  await pg.fill("#login-otp", "000000"); await pg.click("#login-verify");
+  await attendre(() => !document.querySelector("#login-err").hidden);
+  assert.match(await pg.textContent("#login-err"), /Code incorrect ou expiré/);
+  await pg.fill("#login-otp", "123456"); await pg.click("#login-verify");
+  await pg.waitForSelector("#pform");
+  assert.match(await pg.textContent("#app"), /Bienvenue dans ton carnet/);
+});
+
+test("projet : enregistré dans la table projets avec les champs de la V1", async () => {
+  await pg.fill("#f-titre", "Intégrales – Analyse 2"); await pg.check("#f-type-exercices"); await pg.fill("#f-matiere", "Mathématiques");
+  await pg.fill("#f-objectif", "Maîtriser l'intégration par parties"); await pg.fill("#f-echeance", "2026-11-20");
+  await pg.click("button[type=submit]");
+  await pg.waitForSelector("#drop");
+  const p = (await fake()).tables.projets[0];
+  assert.equal(p.owner, A); assert.equal(p.titre, "Intégrales – Analyse 2"); assert.equal(p.type, "exercices");
+  assert.equal(p.matiere, "Mathématiques"); assert.equal(p.echeance, "2026-11-20"); assert.equal(p.nb_supports, 0);
+  assert.deepEqual(p.plan, []); assert.match(p.created_at, /^\d{4}-\d\d-\d\dT/); assert.deepEqual(p.extra, {});
+});
+
+test("supports : PDF texte extrait et fichier dans Storage, note, compteur à jour", async () => {
+  await pg.setInputFiles("#supfile", join(here, "fixtures", "cours.pdf"));
+  await attendre(() => document.querySelectorAll(".sup").length === 1, 15000);
+  await pg.click('summary:has-text("Écrire une note")'); await pg.fill("#note-txt", "Le prof insiste sur LIATE."); await pg.click("[data-a=add-note]");
+  await attendre(() => document.querySelectorAll(".sup").length === 2);
+  await attendre(() => window.__fake.tables.projets[0].nb_supports === 2);
+  const f = await fake();
+  const pdf = f.tables.supports.find(s => s.kind === "pdf");
+  assert.match(pdf.texte, /Integration par parties/);
+  assert.match(pdf.asset_id, new RegExp(`^${A}/f/[a-z0-9]{10}\\.pdf$`));
+  assert.equal(pdf.url, "storage:supports/" + pdf.asset_id, "la base garde la référence, pas le lien temporaire");
+  assert.equal(f.fichiers["supports/" + pdf.asset_id].type, "application/pdf");
+  assert.equal(f.tables.supports.find(s => s.kind === "note").texte, "Le prof insiste sur LIATE.");
+  assert.match(await pg.getAttribute(".sup a[href*='fake.supabase.test/storage']", "href"), /object\/sign\/supports\//, "lien « Ouvrir l'original » temporaire");
+});
+
+test("plan : généré par Claude via la fonction serveur, étape cochée", async () => {
+  await pg.click("[data-tab=plan]"); await pg.click("#genplan"); await pg.waitForSelector(".step");
+  const a = appels.at(-1);
+  assert.equal(a.body.tache, "plan"); assert.equal(a.body.tier, "default"); assert.equal(typeof a.body.prompt, "string");
+  assert.equal(a.headers.authorization, "Bearer jeton-moi@test.cd"); assert.equal(a.headers.apikey, "cle-publique-test");
+  await pg.click(".step input[type=checkbox]");
+  await attendre(() => window.__fake.tables.projets[0].plan.length === 3 && window.__fake.tables.projets[0].plan[0].fait === true);
+  assert.deepEqual(Object.keys((await fake()).tables.projets[0].plan[0]).sort(), ["detail", "fait", "id", "titre"]);
+});
+
+test("séance : réponse affichée, contexte avec les supports, conversation enregistrée", async () => {
+  await pg.click("[data-tab=seance]");
+  await pg.fill("#msg", "Explique-moi l’IPP avec x e^x"); await pg.click("#sendbtn");
+  await attendre(() => document.querySelectorAll(".msg.assistant").length === 1 && !document.querySelector("[data-a=stop]"), 15000);
+  await pg.waitForTimeout(1200);
+  assert.ok(await pg.locator("mjx-container").count() >= 2, "formules affichées");
+  const a = appels.at(-1);
+  assert.equal(a.body.tache, "seance"); assert.equal(a.body.tier, "default");
+  assert.equal(a.body.messages[0].role, "user");
+  assert.ok(a.body.messages[0].content.includes("Integration par parties") && a.body.messages[0].content.includes("LIATE"));
+  assert.equal(a.body.messages.at(-1).content, "Explique-moi l’IPP avec x e^x");
+  await attendre(() => (window.__fake.tables.fils[0] || {}).turns?.length === 2);
+  const fil = (await fake()).tables.fils[0];
+  assert.equal(fil.id, "principal"); assert.deepEqual(fil.turns.map(t => t.role), ["user", "assistant"]);
+  assert.equal(fil.turns[1].content, REPONSE);
+});
+
+test("mode approfondi et photo jointe : Sonnet demandé, photo dans Storage, référence dans la conversation", async () => {
+  await pg.check("#deep");
+  await pg.setInputFiles("#chatimg", { name: "tableau.png", mimeType: "image/png", buffer: PNG });
+  await pg.waitForSelector("#pendingimg img, .pending img, img[alt='Photo jointe']");
+  await pg.fill("#msg", "Corrige ce que j'ai écrit"); await pg.click("#sendbtn");
+  await attendre(() => document.querySelectorAll(".msg.assistant").length === 2 && !document.querySelector("[data-a=stop]"), 15000);
+  const a = appels.at(-1);
+  assert.equal(a.body.tier, "complex"); assert.equal(a.body.images.length, 1);
+  assert.match(a.body.images[0].media_type, /^image\/(jpeg|png)$/); assert.ok(a.body.images[0].data.length > 10);
+  await attendre(() => window.__fake.tables.fils[0].turns.length === 4);
+  const t = (await fake()).tables.fils[0].turns[2];
+  assert.equal(t.hadImg, true); assert.match(t.img, new RegExp(`^storage:supports/${A}/f/`));
+  assert.match(await pg.getAttribute(".msg.user img.thumb", "src"), /fake\.supabase\.test\/storage\/v1\/object\/sign\//);
+  await pg.uncheck("#deep");
+});
+
+test("quota atteint : message clair, rien d'ajouté à la conversation", async () => {
+  reponseChat = (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ erreur: { code: "quota_atteint", message: "Tu as utilisé tout ton quota de la semaine. Il se remet à zéro lundi." } }) });
+  await pg.fill("#msg", "Encore une question"); await pg.click("#sendbtn");
+  await attendre(() => !document.querySelector("#toast").hidden && /quota/.test(document.querySelector("#toast").textContent));
+  assert.equal(await pg.textContent("#toast"), "Tu as utilisé tout ton quota de la semaine. Il se remet à zéro lundi.");
+  assert.equal(await pg.locator(".msg.assistant").count(), 2);
+  reponseChat = null;
+});
+
+test("refus de Claude : texte partiel jeté, message affiché", async () => {
+  reponseChat = r => r.fulfill({ contentType: "application/x-ndjson", body: JSON.stringify({ type: "texte", delta: "Début" }) + "\n" + JSON.stringify({ type: "erreur", code: "refused", message: "Claude n'a pas pu répondre à cette demande. Reformule-la." }) + "\n" });
+  await pg.fill("#msg", "Question refusée"); await pg.click("#sendbtn");
+  await attendre(() => /Reformule-la/.test(document.querySelector("#toast").textContent));
+  await pg.waitForTimeout(300);
+  assert.equal(await pg.locator(".msg.assistant").count(), 2, "pas de réponse partielle ajoutée");
+  reponseChat = null;
+});
+
+test("sous-projet : supports copiés avec la référence du fichier, sans le posséder", async () => {
+  await pg.click("[data-panel=sub]"); await pg.waitForSelector("#subform");
+  await pg.check("#subtype-quiz"); await pg.fill("#sub-focus", "Intégration par parties"); await pg.click("#sub-go");
+  await attendre(() => document.querySelector(".family") && /Sous-projet de/.test(document.querySelector(".family").textContent), 15000);
+  const f = await fake();
+  const enfant = f.tables.projets.find(p => p.parent_id); const parent = f.tables.projets.find(p => !p.parent_id);
+  assert.equal(enfant.parent_id, parent.id); assert.equal(enfant.focus, "Intégration par parties"); assert.equal(enfant.type, "quiz");
+  const copies = f.tables.supports.filter(s => s.projet_id === enfant.id);
+  const pdf = copies.find(s => s.kind === "pdf");
+  assert.equal(pdf.herite, true); assert.equal(pdf.asset_id, null);
+  assert.match(pdf.url, new RegExp(`^storage:supports/${A}/f/[a-z0-9]{10}\\.pdf$`));
+  assert.equal(pdf.url, f.tables.supports.find(s => s.projet_id === parent.id && s.kind === "pdf").url, "référence storage:, pas un lien temporaire");
+  assert.ok(copies.some(s => s.nom === "Résumé de la séance du projet principal"));
+  assert.equal(appels.at(-1).body.tache, "resume");
+  assert.equal(enfant.nb_supports, copies.length);
+});
+
+test("rechargement : session gardée, projets et conversation retrouvés", async () => {
+  await pg.reload(); await pg.waitForSelector(".card");
+  assert.equal(await pg.locator("#login").count(), 0);
+  assert.equal(await pg.locator(".subcards .card").count(), 1);
+  await pg.click(".cards > .card"); await pg.waitForSelector(".msg.assistant", { timeout: 8000 });
+  assert.equal(await pg.locator(".msg.assistant").count(), 2);
+});
+
+test("suppression d'un support : fichier supprimé du stockage", async () => {
+  await pg.click("[data-tab=supports]"); await attendre(() => document.querySelectorAll(".sup").length >= 2);
+  const avant = Object.keys((await fake()).fichiers).filter(k => k.endsWith(".pdf")).length;
+  const btn = pg.locator(".sup", { hasText: "cours" }).first().locator("[data-a=del-sup]");
+  await btn.click(); await btn.click();
+  await attendre(() => !window.__fake.tables.supports.some(s => s.kind === "pdf" && s.asset_id));
+  assert.equal(Object.keys((await fake()).fichiers).filter(k => k.endsWith(".pdf")).length, avant - 1);
+  assert.ok((await fake()).tables.supports.some(s => s.kind === "pdf" && s.herite), "la copie du sous-projet reste");
+});
+
+test("autre testeur : ne voit aucun projet de A ; Google proposé", async () => {
+  const c2 = await contexte(); const p2 = await nouvellePage(c2);
+  await p2.goto("http://carnet.test/"); await p2.waitForSelector("#login");
+  await p2.click("#login-google");
+  await p2.waitForFunction(() => window.__fake.oauth.length === 1);
+  assert.deepEqual(await p2.evaluate(() => window.__fake.oauth[0]), { provider: "google", redirectTo: "http://carnet.test/" });
+  // Le faux Supabase est propre à chaque navigateur : on y recopie les données de A pour vérifier le filtrage.
+  const donnees = await fake();
+  await p2.evaluate(d => { window.__fake.tables = d.tables; window.__fakeSave(); }, donnees);
+  await p2.fill("#login-email", "b@test.cd"); await p2.click("#login-send"); await p2.waitForSelector("#login-code:not([hidden])");
+  await p2.fill("#login-otp", "123456"); await p2.click("#login-verify");
+  await p2.waitForSelector("#pform");
+  assert.match(await p2.textContent("#app"), /Bienvenue/, "B arrive sur un carnet vide");
+  await c2.close();
+});
+
+test("déconnexion en deux clics, retour à l'écran de connexion", async () => {
+  await pg.click("[data-a=home]").catch(() => {}); await pg.waitForSelector("[data-a=logout]");
+  await pg.click("[data-a=logout]"); assert.equal(await pg.textContent("[data-a=logout]"), "Confirmer ?");
+  await Promise.all([pg.waitForEvent("load"), pg.click("[data-a=logout]")]);
+  await pg.waitForSelector("#login");
+});
+
+test("base injoignable : message clair, pas de mode local", async () => {
+  await pg.evaluate(() => { window.__fake.session = { access_token: "x", user: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email: "moi@test.cd" } }; window.__fake.echecs.projets = "connexion perdue"; window.__fakeSave(); });
+  await pg.reload();
+  await attendre(() => /Carnet indisponible/.test(document.querySelector("#app").textContent));
+  assert.match(await pg.textContent("#app"), /Impossible de joindre le serveur du carnet/);
+  assert.equal(await pg.locator("#localbanner").count(), 0);
+});
+
+test("aucune erreur JavaScript pendant tout le parcours", () => {
+  assert.deepEqual(erreurs, []);
+});

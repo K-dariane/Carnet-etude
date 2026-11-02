@@ -11,8 +11,36 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
 | Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
-| Connexion (lien e-mail, Google) | À faire |
-| Branchement de l'app | À faire |
+| Connexion (lien e-mail, code, Google) | Fait, testé (faux Supabase) |
+| Branchement de l'app | Fait, testé (faux Supabase) ; à mettre en ligne |
+
+## L'app (`app/`)
+
+| Fichier | Rôle |
+| --- | --- |
+| `app/index.html` | Copie de la V1 avec 5 changements seulement : chargement de Supabase, champ e-mail, messages d'erreur du serveur, plus de mode test local, bouton « Se déconnecter ». Les consignes envoyées à Claude (`RULES`, `TYPES`) sont identiques. |
+| `app/backend.js` | Fournit à l'app les mêmes services que l'artifact (`db`, `user`, `sample`, `assets`), branchés sur Supabase. Les chemins de la V1 (`data/users/<uid>/carnet/projets/…`) sont traduits vers les tables. |
+| `app/config.js` | Adresse du projet et clé publique (`anon`). |
+
+**Connexion** : au choix, lien reçu par e-mail, code à 6 chiffres reçu dans le même e-mail (utile si le lien s'ouvre dans un autre navigateur), ou Google. La session reste ouverte sur l'appareil.
+
+**Fichiers** : la base garde la référence `storage:supports/<chemin>`. L'app la remplace par un lien temporaire de 24 h pour l'affichage, et refait le lien quand tu reviens sur la page.
+
+**Mise à jour des données** : l'app relit les données après chaque modification et quand tu reviens sur la page. Il n'y a pas de synchronisation en direct entre deux appareils ouverts en même temps.
+
+### Réglages Supabase pour la connexion
+
+1. **Authentication → URL Configuration** :
+   - **Site URL** : l'adresse où l'app est en ligne (par exemple `https://carnet.example.com/`).
+   - **Redirect URLs** : ajoute cette même adresse.
+2. **Authentication → Providers → Email** : activé.
+3. **Authentication → Email Templates → Magic Link** : ajoute le code dans le message, par exemple `Ton code : {{ .Token }}`, en plus du lien `{{ .ConfirmationURL }}`.
+4. **Authentication → Providers → Google** : identifiant client et secret de Google Cloud. Dans Google Cloud, l'URI de redirection autorisée est `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
+5. **`app/config.js`** : remplace « à préciser » par la clé `anon` / `publishable` (Project Settings → API). Cette clé est publique.
+
+### Mise en ligne
+
+`app/` est un site statique (3 fichiers). N'importe quel hébergeur statique convient : Cloudflare Pages, Netlify, GitHub Pages. L'adresse obtenue doit être mise dans les réglages de connexion ci-dessus et, si tu veux restreindre l'accès à la fonction, dans le secret `ALLOWED_ORIGINS`.
 
 ## Base de données
 
@@ -141,6 +169,8 @@ Ce que lance `npm test` :
 | `test/chat.test.mjs` | Fonction `chat` avec le vrai SDK et une fausse API Claude (modèles, cache, streaming, quota, erreurs, arrêt en cours de réponse) |
 | `test/chat.deno.test.ts` | La même fonction sous Deno, l'environnement réel des Edge Functions |
 | `test/televerser.test.mjs` | Téléversement des fichiers vers Storage (faux serveur) |
+| `test/app.test.mjs` | L'app de bout en bout dans Chromium (Playwright), avec un faux Supabase (`test/fake_supabase.js`) et une fausse fonction `chat` : connexion, projets, supports, plan, séance, mode approfondi, photo, quota, refus, sous-projet, rechargement, suppression, autre testeur, déconnexion, base injoignable |
+| `test/supabase_reel.test.mjs` | Forme exacte des requêtes de `backend.js` avec la vraie bibliothèque supabase-js |
 
 Aucun test n'appelle la vraie API Claude : ils ne coûtent rien.
 
