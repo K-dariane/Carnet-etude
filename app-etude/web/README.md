@@ -105,7 +105,9 @@ Dans le tableau de bord Supabase :
 
 1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`).
 2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et la clé serveur (`SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SECRET_KEYS`) sont fournis automatiquement.
-3. Déployer la fonction avec la CLI Supabase, depuis `app-etude/web` :
+3. Déployer la fonction. **Sans rien installer** : Edge Functions → Deploy a new function → Via Editor, nommer la fonction `chat`, coller tout le contenu de `deploiement/chat-un-fichier.ts`, puis Deploy. Ensuite, dans les réglages de la fonction, désactiver « Verify JWT ». Ce fichier est fabriqué à partir du code testé par `node scripts/fichier-unique.mjs`, et `npm test` vérifie qu'il est à jour.
+
+   **Ou** avec la CLI Supabase, depuis `app-etude/web` :
    ```bash
    npx supabase login
    ```
