@@ -6,8 +6,8 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Étape | État |
 | --- | --- |
 | Schéma de la base, règles d'accès, import | Fait, testé |
-| Fonction serveur IA (Haiku / Sonnet, streaming) | À faire |
-| Quota : 500 000 tokens par testeur et par semaine | À faire |
+| Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
+| Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
 | Fichiers (Supabase Storage) | À faire |
 | Connexion (lien e-mail, Google) | À faire |
 | Branchement de l'app | À faire |
@@ -30,6 +30,56 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 
 Installation : Supabase → SQL Editor → coller le contenu du fichier de migration → Run.
 
+## Fonction serveur IA (`supabase/functions/chat`)
+
+L'app n'appelle jamais Claude directement : elle appelle la fonction `chat`, qui garde la clé API en secret.
+
+| Étape | Ce que fait la fonction |
+| --- | --- |
+| 1 | Vérifie que le testeur est connecté (jeton Supabase). Sinon : `session_expired`. |
+| 2 | Vérifie la demande (rôles, tailles, images). Sinon : `requete_invalide`, `prompt_too_large` ou `image_rejected`. |
+| 3 | Vérifie le quota de la semaine. S'il est épuisé : `quota_atteint`, avec la date de remise à zéro. |
+| 4 | Appelle Claude et renvoie le texte au fil de l'écriture. |
+| 5 | Enregistre les tokens consommés dans `ia_appels`, même si la réponse est arrêtée en cours de route. |
+
+**Modèles** (choisis par le serveur, jamais par le navigateur) :
+
+| `tier` envoyé par l'app | Modèle | Effort |
+| --- | --- | --- |
+| `default` (séances, transcriptions, plan, résumé) | `claude-haiku-5-5` | `medium` |
+| `complex` (mode approfondi) | `claude-sonnet-5-5` | `high` |
+
+- **Cache de prompt** : activé automatiquement. Le début de la conversation (consignes et supports) est relu depuis le cache au tour suivant, ce qui coûte environ 10 fois moins cher.
+- **Refus de sécurité** : avec Sonnet, l'API relance la demande sur un autre modèle (repli serveur `fallbacks: "default"`). Haiku n'a pas de repli : le testeur voit « Claude n'a pas pu répondre à cette demande. Reformule-la. »
+- **Limites par demande** : 16 000 tokens de réponse au plus, 300 000 octets de texte, 5 images de 5 Mo au plus.
+
+**Format des échanges** : `POST /functions/v1/chat` avec `{ messages, tier, tache, images }` (ou `prompt` à la place de `messages`). Réponse en NDJSON (une ligne JSON par événement) :
+`{"type":"texte","delta":"…"}` … puis `{"type":"fin","text","tronque","modele","tokens","quota"}`, ou `{"type":"erreur","code","message"}`.
+
+### Quota (`supabase/migrations/20261102000002_ia_quota.sql`)
+
+- **Ce qui compte** : 500 000 tokens par testeur et par semaine, tous modèles confondus (entrée + cache écrit + cache lu + sortie).
+- **La semaine** : elle commence le lundi à 00:00, heure de Kinshasa.
+- **Changer le quota de tout le monde** : `update ia_config set quota_semaine = 800000;`
+- **Changer le quota d'un seul testeur** : `insert into ia_quotas (owner, quota_semaine) values ('<uuid>', 1000000);`
+- **Voir ce qu'il reste** : un testeur connecté lit son quota avec `ia_mon_quota()`. Il ne voit que sa propre consommation et ne peut rien écrire.
+- **Dépassement possible** : le quota est vérifié avant chaque demande. La dernière réponse de la semaine peut donc faire passer un peu au-dessus de la limite (au plus 16 000 tokens de réponse, plus l'entrée de cette demande). Pareil si plusieurs demandes partent en même temps.
+
+### Limite connue
+
+C'est l'app qui écrit les consignes envoyées à Claude (`RULES`, modes). Un testeur malin pourrait donc utiliser la fonction comme un Claude généraliste, mais seulement dans la limite de son quota. Pour la version commerciale, il faudra déplacer les consignes côté serveur.
+
+### Déploiement
+
+Dans le tableau de bord Supabase :
+
+1. **SQL Editor** : exécuter les deux fichiers de `supabase/migrations/`, dans l'ordre.
+2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement.
+3. Déployer la fonction avec la CLI Supabase, depuis `app-etude/web` :
+   ```bash
+   npx supabase functions deploy chat
+   ```
+
 ## Importer tes projets de l'artifact
 
 1. Connecte-toi une fois à l'app web avec ton adresse e-mail pour que ton compte existe.
@@ -47,11 +97,25 @@ Les fichiers d'origine (photos, PDF) restent dans l'artifact pour l'instant : le
 
 ## Tests
 
-Il faut Postgres 15 ou plus en local, ou une base de test dans `PGURL`.
+Il faut Postgres 15 ou plus en local, ou une base de test dans `PGURL`. Installe d'abord les outils de test (le SDK Anthropic, supabase-js et Deno, en versions figées) :
+
+```bash
+npm install
+```
 
 ```bash
 npm test
 ```
+
+Ce que lance `npm test` :
+
+| Fichier | Ce qu'il teste |
+| --- | --- |
+| `test/db.test.mjs` | Schéma, règles d'accès, quota (SQL), import |
+| `test/chat.test.mjs` | Fonction `chat` avec le vrai SDK et une fausse API Claude (modèles, cache, streaming, quota, erreurs, arrêt en cours de réponse) |
+| `test/chat.deno.test.ts` | La même fonction sous Deno, l'environnement réel des Edge Functions |
+
+Aucun test n'appelle la vraie API Claude : ils ne coûtent rien.
 
 Pour tester aussi l'import sur un vrai export (rien n'est envoyé ailleurs, la base de test est jetable) :
 

@@ -22,8 +22,9 @@ La base de connaissances du projet claude.ai est vide. Ressources existantes :
 - `test/run.js`, `test/run_guest.js`, `test/run_copy.js` : tests de bout en bout Playwright (propriétaire, testeur, mode copie).
 - `web/` : version web autonome (Supabase) pour les testeurs, sans compte Claude. En cours, voir `web/README.md`.
   - `web/supabase/migrations/` : schéma de la base et règles d'accès.
+  - `web/supabase/functions/chat/` et `_shared/chat.ts` : fonction serveur IA (clé Claude en secret, Haiku / Sonnet, streaming, quota).
   - `web/import/import.mjs` : import des projets de l'artifact (génère un script SQL).
-  - `web/test/` : tests (`npm test` dans `web/`, Postgres local).
+  - `web/test/` : tests (`npm install` puis `npm test` dans `web/` ; Postgres local, fausse API Claude, Deno).
 - `couts/modele.py` : modèle de coûts (IA par séance et par étudiant, coûts fixes, scénarios de prix).
 - Artifact « Carnet d'étude » : https://claude.ai/artifact/Mr8uMTEjFs1su6snCTDPhr (slug `a8d3168d-afef-460f-a726-8c73c818a0f9`), partagé publiquement.
 - Doc « Partie administrative du Carnet d'étude » : https://claude.ai/artifact/U2M9uAi6h4yvGYB5J8hPiS (statut juridique RDC, fiscalité, paiements, textes juridiques, règles Anthropic, back-office, checklist de lancement).

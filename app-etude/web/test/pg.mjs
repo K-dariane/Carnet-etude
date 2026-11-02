@@ -29,10 +29,11 @@ export async function startPg() {
   };
 }
 
-// Exécute un script SQL. as = uuid → rôle « authenticated » avec ce compte ; "anon" → visiteur.
+// Exécute un script SQL. as = uuid → rôle « authenticated » avec ce compte ; "anon" → visiteur ; "service" → fonction serveur.
 export function psql(url, script, { as } = {}) {
   let head = "";
   if (as === "anon") head = "set role anon;\n";
+  else if (as === "service") head = "set role service_role;\n";
   else if (as) head = `set role authenticated;\nselect set_config('request.jwt.claims', '{"sub":"${as}","role":"authenticated"}', false) \\g /dev/null\n`;
   const r = spawnSync("psql", [url, "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"], { input: head + script, encoding: "utf8" });
   if (r.status !== 0) { const e = new Error((r.stderr || "").trim() || "psql a échoué"); e.stderr = r.stderr; throw e; }

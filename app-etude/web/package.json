@@ -3,6 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test --test-timeout=20000 test/*.test.mjs && npm run test:deno",
+    "test:deno": "deno check --config supabase/functions/chat/deno.json supabase/functions/chat/index.ts && deno test --config supabase/functions/chat/deno.json --allow-net --allow-env --allow-read test/chat.deno.test.ts"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
+    "@supabase/supabase-js": "2.118.0",
+    "deno": "2.9.6"
   }
 }
