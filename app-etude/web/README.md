@@ -36,7 +36,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 2. **Authentication → Providers → Email** : activé.
 3. **Authentication → Email Templates → Magic Link** : ajoute le code dans le message, par exemple `Ton code : {{ .Token }}`, en plus du lien `{{ .ConfirmationURL }}`.
 4. **Authentication → Providers → Google** : identifiant client et secret de Google Cloud. Dans Google Cloud, l'URI de redirection autorisée est `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
-5. **`app/config.js`** : remplace « à préciser » par la clé `anon` / `publishable` (Project Settings → API). Cette clé est publique.
+5. **`app/config.js`** : contient la clé publique (`sb_publishable_…`). Elle est faite pour être visible.
 
 ### Mise en ligne
 
@@ -104,14 +104,15 @@ C'est l'app qui écrit les consignes envoyées à Claude (`RULES`, modes). Un te
 Dans le tableau de bord Supabase :
 
 1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`).
-2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement.
+2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et la clé serveur (`SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SECRET_KEYS`) sont fournis automatiquement.
 3. Déployer la fonction avec la CLI Supabase, depuis `app-etude/web` :
    ```bash
    npx supabase login
    ```
    ```bash
-   npx supabase functions deploy chat --project-ref xyrlifukufcntwinrtvz
+   npx supabase functions deploy chat --project-ref xyrlifukufcntwinrtvz --no-verify-jwt
    ```
+   `--no-verify-jwt` : ton projet utilise les nouvelles clés (`sb_publishable_…`). Avec ces clés, Supabase conseille de vérifier le jeton dans la fonction plutôt qu'à l'entrée. Ce n'est pas une faille : la fonction `chat` refuse toute demande sans jeton valide (`auth.getUser`), ce qui est testé.
 
 ## Fichiers (Supabase Storage)
 

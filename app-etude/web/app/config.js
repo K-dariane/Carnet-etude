@@ -3,5 +3,5 @@
 // Ne mets JAMAIS ici la clé service_role ni la clé Claude.
 window.CARNET_CONFIG = {
   supabaseUrl: "https://xyrlifukufcntwinrtvz.supabase.co",
-  supabaseAnonKey: "à préciser"  // Supabase → Project Settings → API → clé anon / publishable
+  supabaseAnonKey: "sb_publishable_IZ0fmWWscOBicND1T4PcuA_aW0Lnj2K"  // clé publique (publishable)
 };

@@ -62,11 +62,14 @@ test("connexion : écran affiché, e-mail vérifié, lien envoyé, code faux ref
   await pg.goto("http://carnet.test/");
   await pg.waitForSelector("#login");
   assert.match(await pg.textContent("#app"), /Pas besoin de compte Claude/);
+  assert.equal(await pg.isVisible("#login-code"), false, "la zone du code n'apparaît qu'après l'envoi du lien");
+  assert.equal(await pg.isVisible("#login-err"), false);
   await pg.fill("#login-email", "pas-une-adresse"); await pg.click("#login-send");
   assert.equal(await pg.textContent("#login-err"), "Écris une adresse e-mail valide.");
   await pg.fill("#login-email", "Moi@Test.cd"); await pg.click("#login-send");
   await pg.waitForSelector("#login-code:not([hidden])");
   assert.match(await pg.textContent("#login-sent"), /Lien envoyé à moi@test\.cd/);
+  assert.equal(await pg.isVisible("#login-code"), true); assert.equal(await pg.isVisible("#login-form"), false);
   let f = await fake();
   assert.deepEqual(f.emails, [{ email: "moi@test.cd", redirect: "http://carnet.test/" }]);
   assert.equal(f.client.key, "cle-publique-test"); assert.equal(f.client.flowType, "implicit");

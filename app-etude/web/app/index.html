@@ -97,6 +97,7 @@ button.card:hover { border-color: var(--accent); }
 .field { display: grid; gap: 6px; }
 .field label, .field .lbl { font-weight: 700; font-size: .95rem; }
 .field .hint { color: var(--muted); font-size: .85rem; margin: 0; }
+[hidden] { display: none !important; }  /* version web : l'attribut hidden l'emporte sur display (écran de connexion) */
 input[type=text], input[type=email], input[type=date], textarea {
   width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 10px 12px; }
 textarea { resize: vertical; min-height: 80px; }

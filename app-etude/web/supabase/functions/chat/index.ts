@@ -1,5 +1,6 @@
 // Fonction serveur « chat » (Supabase Edge Function, Deno).
-// Secrets nécessaires : ANTHROPIC_API_KEY (à ajouter), SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY (fournis par Supabase).
+// Secrets nécessaires : ANTHROPIC_API_KEY (à ajouter) ; SUPABASE_URL et la clé serveur (SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_SECRET_KEYS) sont fournis par Supabase.
+// Déployer avec --no-verify-jwt : la fonction vérifie elle-même le jeton du testeur (auth.getUser).
 // Facultatif : ALLOWED_ORIGINS = adresses de l'app séparées par des virgules (ex. https://carnet.example.com).
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
@@ -11,8 +12,20 @@ const env = (k: string) => {
   return v;
 };
 
+// Clé serveur : ancienne clé service_role, ou nouvelle clé secrète (sb_secret_…) fournie dans SUPABASE_SECRET_KEYS.
+function cleServeur(): string {
+  const ancienne = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (ancienne) return ancienne;
+  try {
+    const cles = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}") as Record<string, string>;
+    const v = cles.default || Object.values(cles)[0];
+    if (v) return v;
+  } catch { /* format inattendu */ }
+  throw new Error("Secret manquant : SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_SECRET_KEYS");
+}
+
 const anthropic = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY"), maxRetries: 2 });
-const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+const admin = createClient(env("SUPABASE_URL"), cleServeur(), {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
