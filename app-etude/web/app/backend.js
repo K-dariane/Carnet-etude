@@ -32,15 +32,30 @@
 
   /* ---------- Connexion ---------- */
   let session = null;
+  // Lien reçu par e-mail au format …/?token_hash=…&type=email : c'est l'app qui valide la connexion.
+  // Les aperçus automatiques (messageries, WhatsApp) ouvrent la page sans lancer l'app : ils ne « grillent » plus le lien.
+  const params = new URLSearchParams(location.search);
+  const tokenHash = params.get("token_hash");
+  const typeLien = ["email", "magiclink", "signup"].includes(params.get("type")) ? params.get("type") : "email";
+  if (tokenHash) {
+    params.delete("token_hash"); params.delete("type");
+    history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params : "") + location.hash);
+  }
+  let lienRate = false;
   const pret = new Promise(resolve => {
     const fini = s => { if (s && !session) { session = s; resolve(s); } };
     sb.auth.onAuthStateChange((evt, s) => {
       if (evt === "SIGNED_OUT") { session = null; return; }
       if (s) { if (session) session = s; else fini(s); }
     });
-    sb.auth.getSession().then(({ data }) => {
-      if (data && data.session) fini(data.session);
-      else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ecranConnexion);
+    sb.auth.getSession().then(async ({ data }) => {
+      if (data && data.session) return fini(data.session);
+      if (tokenHash) {
+        const { data: d, error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: typeLien });
+        if (!error && d && d.session) return fini(d.session);
+        lienRate = true;
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ecranConnexion);
       else ecranConnexion();
     });
   });
@@ -48,7 +63,8 @@
 
   function ecranConnexion() {
     if (session) return;
-    const erreurLien = /error_description|error_code/.test(location.hash) ? "Ce lien de connexion a expiré ou a déjà servi. Demande un nouveau lien." : "";
+    const erreurLien = (lienRate || /error_description|error_code/.test(location.hash))
+      ? "Le lien de connexion que tu as ouvert n'est plus valable (il a expiré ou a déjà servi). Pas de souci : demande un nouveau lien ci-dessous, ou utilise Google." : "";
     if (erreurLien) history.replaceState(null, "", location.pathname + location.search);
     $("#top").innerHTML = `<div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/></svg><span>Carnet d'étude</span></div>`;
     $("#app").innerHTML = `

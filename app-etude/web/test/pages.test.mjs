@@ -57,3 +57,29 @@ test("manifeste d'installation valide", () => {
   assert.equal(m.lang, "fr"); assert.equal(m.start_url, "./"); assert.equal(m.display, "standalone");
   assert.equal(m.icons[0].src, "icone.svg");
 });
+
+test("lien d'e-mail au format token_hash : l'app valide la connexion et nettoie l'adresse", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto(BASE + "?token_hash=hash-valide&type=email");
+  await pg.waitForSelector("#pform", { timeout: 10000 });
+  assert.equal(pg.url(), BASE, "token_hash retiré de l'adresse");
+  assert.deepEqual(await pg.evaluate(() => window.__fake.verifications), [{ token_hash: "hash-valide", type: "email" }]);
+});
+
+test("lien d'e-mail périmé ou déjà utilisé : message rassurant, on peut redemander un lien", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto(BASE + "?token_hash=perime&type=email");
+  await pg.waitForSelector("#login");
+  assert.match(await pg.textContent("#login-err"), /n'est plus valable.*demande un nouveau lien/);
+  assert.equal(pg.url(), BASE);
+  assert.equal(await pg.isVisible("#login-form"), true);
+});
+
+test("adresse partagée avec une erreur (#error=…) : même message, adresse nettoyée", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto("about:blank");   // sinon un simple changement de « # » ne recharge pas la page
+  await pg.goto(BASE + "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid");
+  await pg.waitForSelector("#login");
+  assert.match(await pg.textContent("#login-err"), /n'est plus valable/);
+  assert.equal(pg.url(), BASE);
+});

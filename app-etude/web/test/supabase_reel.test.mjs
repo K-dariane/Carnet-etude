@@ -61,3 +61,10 @@ test("lien de connexion par e-mail : adresse de retour transmise", async () => {
   assert.equal(u.pathname, "/auth/v1/otp"); assert.equal(u.searchParams.get("redirect_to"), "https://carnet.test/");
   assert.equal(JSON.parse(r.body).email, "moi@test.cd"); assert.equal(JSON.parse(r.body).create_user, true);
 });
+
+test("lien d'e-mail token_hash : l'app le valide par /auth/v1/verify", async () => {
+  await sb.auth.verifyOtp({ token_hash: "abc123", type: "email" });
+  const r = derniere();
+  assert.equal(new URL(r.url).pathname, "/auth/v1/verify"); assert.equal(r.method, "POST");
+  assert.deepEqual(JSON.parse(r.body).token_hash, "abc123"); assert.equal(JSON.parse(r.body).type, "email");
+});

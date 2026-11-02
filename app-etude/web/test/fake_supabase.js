@@ -109,7 +109,9 @@
       if (st.echecs.otp) return { data: null, error: { message: st.echecs.otp, status: 429 } };
       st.emails.push({ email, redirect: options && options.emailRedirectTo }); sauver(); return { data: {}, error: null };
     },
-    async verifyOtp({ email, token }) {
+    async verifyOtp({ email, token, token_hash, type }) {
+      st.verifications = (st.verifications || []).concat([{ token_hash, type }]);
+      if (token_hash) { if (token_hash !== "hash-valide") { sauver(); return { data: null, error: { message: "Email link is invalid or has expired", status: 403 } }; } email = "moi@test.cd"; token = "123456"; }
       if (token !== "123456") return { data: null, error: { message: "Token has expired or is invalid", status: 403 } };
       st.session = { access_token: "jeton-" + email, user: { id: email.startsWith("b") ? "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" : "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email } };
       sauver(); emettre("SIGNED_IN", st.session); return { data: { session: st.session }, error: null };

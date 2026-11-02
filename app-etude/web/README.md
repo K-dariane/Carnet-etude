@@ -35,7 +35,9 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
    - **Site URL** : l'adresse où l'app est en ligne (par exemple `https://carnet.example.com/`).
    - **Redirect URLs** : ajoute cette même adresse.
 2. **Authentication → Providers → Email** : activé.
-3. **Authentication → Email Templates → Magic Link** : ajoute le code dans le message, par exemple `Ton code : {{ .Token }}`, en plus du lien `{{ .ConfirmationURL }}`.
+3. **Authentication → Email Templates → Magic Link** et **Confirm signup** : le lien pointe vers l'app avec `{{ .TokenHash }}` (et non `{{ .ConfirmationURL }}`), plus le code :
+   `<a href="{{ .SiteURL }}?token_hash={{ .TokenHash }}&type=email">Me connecter</a>` et `{{ .Token }}`.
+   C'est l'app qui valide le lien. Les aperçus automatiques des messageries et de WhatsApp, qui ouvrent les liens sans lancer l'app, ne peuvent donc plus le « griller ». Il faut un service d'envoi d'e-mails à toi (SMTP, par exemple Gmail) pour modifier ces modèles.
 4. **Authentication → Providers → Google** : identifiant client et secret de Google Cloud. Dans Google Cloud, l'URI de redirection autorisée est `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
 5. **`app/config.js`** : contient la clé publique (`sb_publishable_…`). Elle est faite pour être visible.
 
