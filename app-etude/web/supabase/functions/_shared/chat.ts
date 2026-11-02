@@ -79,23 +79,34 @@ function erreur(req: Request, deps: Deps, status: number, code: string, extra: R
     { status, headers: { ...cors(req, deps), "Content-Type": "application/json; charset=utf-8" } });
 }
 
-/* Valide la requête et construit les messages pour l'API. Renvoie un code d'erreur ou les paramètres. */
-export function preparer(body: unknown): { code: string } | { messages: Anthropic.Beta.BetaMessageParam[]; tier: "default" | "complex"; tache: string } {
-  if (!body || typeof body !== "object") return { code: "requete_invalide" };
+/* Valide la requête et construit les messages pour l'API. Renvoie un code d'erreur (avec la raison) ou les paramètres.
+   Plusieurs messages du même rôle à la suite sont acceptés et regroupés : la V1 envoie les consignes et les supports
+   dans un premier message « user », suivi directement de la question de l'étudiant. */
+export function preparer(body: unknown): { code: string; raison?: string } | { messages: Anthropic.Beta.BetaMessageParam[]; tier: "default" | "complex"; tache: string } {
+  const refus = (raison: string) => ({ code: "requete_invalide", raison });
+  if (!body || typeof body !== "object") return refus("corps de la demande absent ou illisible");
   const b = body as Record<string, unknown>;
-  let msgs: Msg[];
-  if (typeof b.prompt === "string") msgs = [{ role: "user", content: b.prompt }];
-  else if (Array.isArray(b.messages)) msgs = b.messages as Msg[];
-  else return { code: "requete_invalide" };
-  if (!msgs.length || msgs.length > LIMITES.messages) return { code: "requete_invalide" };
+  let brut: Msg[];
+  if (typeof b.prompt === "string") brut = [{ role: "user", content: b.prompt }];
+  else if (Array.isArray(b.messages)) brut = b.messages as Msg[];
+  else return refus("ni « messages » ni « prompt »");
+  if (!brut.length) return refus("aucun message");
+  if (brut.length > LIMITES.messages) return refus(`plus de ${LIMITES.messages} messages`);
   let total = 0;
-  for (let i = 0; i < msgs.length; i++) {
-    const m = msgs[i];
-    if (!m || typeof m.content !== "string" || !m.content.trim()) return { code: "requete_invalide" };
-    if (m.role !== (i % 2 === 0 ? "user" : "assistant")) return { code: "requete_invalide" };
+  const msgs: Msg[] = [];
+  for (let i = 0; i < brut.length; i++) {
+    const m = brut[i];
+    if (!m || typeof m.content !== "string") return refus(`message ${i + 1} : contenu absent`);
+    if (m.role !== "user" && m.role !== "assistant") return refus(`message ${i + 1} : rôle « ${String(m?.role)} » inconnu`);
+    if (!m.content.trim()) continue;                       // message vide : ignoré
     total += octets(m.content);
+    const prec = msgs[msgs.length - 1];
+    if (prec && prec.role === m.role) prec.content += "\n\n" + m.content;
+    else msgs.push({ role: m.role, content: m.content });
   }
-  if (msgs[msgs.length - 1].role !== "user") return { code: "requete_invalide" };
+  if (!msgs.length) return refus("tous les messages sont vides");
+  if (msgs[0].role !== "user") return refus("le premier message doit venir de l'étudiant");
+  if (msgs[msgs.length - 1].role !== "user") return refus("le dernier message doit venir de l'étudiant");
   if (total > LIMITES.octetsTexte) return { code: "prompt_too_large" };
   const imgs = (b.images ?? []) as Img[];
   if (!Array.isArray(imgs) || imgs.length > LIMITES.images) return { code: "image_rejected" };
@@ -159,7 +170,10 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   try { const t = await req.text(); if (octets(t) > LIMITES.octetsCorps) return erreur(req, deps, 413, "prompt_too_large"); body = JSON.parse(t); }
   catch { return erreur(req, deps, 400, "requete_invalide"); }
   const prep = preparer(body);
-  if ("code" in prep) return erreur(req, deps, prep.code === "prompt_too_large" ? 413 : 400, prep.code);
+  if ("code" in prep) {
+    if (prep.raison) deps.log?.("demande refusée :", prep.raison);
+    return erreur(req, deps, prep.code === "prompt_too_large" ? 413 : 400, prep.code, prep.raison ? { raison: prep.raison } : {});
+  }
 
   // 3. Quota de la semaine
   let q: Quota;

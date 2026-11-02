@@ -153,12 +153,25 @@ test("quota atteint : 429 quota_atteint avec la date de remise à zéro, Claude 
   assert.equal(requetes.length, 0); assert.equal(appels.length, 0);
 });
 
+test("forme envoyée par l'app (consignes puis question, deux messages étudiant à la suite) : acceptée et regroupée", async () => {
+  const body = { messages: [{ role: "user", content: "CONSIGNES ET SUPPORTS\n\n---\nLa conversation avec l'étudiant commence ci-dessous." },
+    { role: "user", content: "Explique l'IPP" }], tier: "default", tache: "seance" };
+  const l = await lignes(await handle(requete(body), deps()));
+  assert.equal(l.at(-1).type, "fin");
+  const m = requetes[0].body.messages;
+  assert.equal(m.length, 1); assert.equal(m[0].role, "user");
+  assert.equal(m[0].content, "CONSIGNES ET SUPPORTS\n\n---\nLa conversation avec l'étudiant commence ci-dessous.\n\nExplique l'IPP");
+  // Suite de séance : consignes, question, réponse, nouvelle question ; un message vide est ignoré.
+  requetes = [];
+  await lignes(await handle(requete({ messages: [{ role: "user", content: "C" }, { role: "user", content: "Q1" }, { role: "assistant", content: "R1" }, { role: "assistant", content: " " }, { role: "user", content: "Q2" }] }), deps()));
+  assert.deepEqual(requetes[0].body.messages, [{ role: "user", content: "C\n\nQ1" }, { role: "assistant", content: "R1" }, { role: "user", content: "Q2" }]);
+});
+
 test("requêtes invalides : 400 ou 413, message en français", async () => {
   const cas = [
     [{}, 400, "requete_invalide"],
     [{ messages: [] }, 400, "requete_invalide"],
     [{ messages: [{ role: "assistant", content: "x" }] }, 400, "requete_invalide"],
-    [{ messages: [{ role: "user", content: "a" }, { role: "user", content: "b" }] }, 400, "requete_invalide"],
     [{ messages: [{ role: "user", content: "a" }, { role: "assistant", content: "b" }] }, 400, "requete_invalide"],
     [{ messages: [{ role: "system", content: "a" }] }, 400, "requete_invalide"],
     [{ prompt: "x".repeat(LIMITES.octetsTexte + 1) }, 413, "prompt_too_large"],
@@ -170,6 +183,7 @@ test("requêtes invalides : 400 ou 413, message en français", async () => {
     const res = await handle(requete(body), deps());
     assert.equal(res.status, status, JSON.stringify(body).slice(0, 80));
     const e = (await res.json()).erreur; assert.equal(e.code, code); assert.ok(e.message.length > 10);
+    if (code === "requete_invalide") assert.ok(e.raison && e.raison.length > 5, "raison donnée : " + JSON.stringify(e));
   }
   const brut = await handle(new Request("http://fn/chat", { method: "POST", body: "{pas du json", headers: { authorization: "Bearer jeton-valide" } }), deps());
   assert.equal(brut.status, 400);
