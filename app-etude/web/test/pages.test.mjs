@@ -83,3 +83,18 @@ test("adresse partagée avec une erreur (#error=…) : même message, adresse ne
   assert.match(await pg.textContent("#login-err"), /n'est plus valable/);
   assert.equal(pg.url(), BASE);
 });
+
+test("échec de la connexion Google : la vraie raison est affichée, pas « lien expiré »", async () => {
+  await pg.goto("about:blank");
+  await pg.goto(BASE + "#error=server_error&error_code=unexpected_failure&error_description=Unable+to+exchange+external+code%3A+4%2F0Ab");
+  await pg.waitForSelector("#login");
+  const t = await pg.textContent("#login-err");
+  assert.match(t, /La connexion n'a pas abouti/); assert.match(t, /Unable to exchange external code/);
+  assert.doesNotMatch(t, /expiré/);
+  assert.equal(pg.url(), BASE);
+  await pg.goto("about:blank");
+  await pg.goto(BASE + "?error=access_denied&error_description=");
+  await pg.waitForSelector("#login");
+  assert.match(await pg.textContent("#login-err"), /Connexion annulée/);
+  assert.equal(pg.url(), BASE);
+});

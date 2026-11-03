@@ -26,6 +26,13 @@
     return;
   }
 
+  // Erreur de connexion renvoyée dans l'adresse (#error=… ou ?error=…), lue avant que la bibliothèque ne touche à l'adresse.
+  const erreurRetour = (() => {
+    const p = new URLSearchParams(location.hash.slice(1)); const q = new URLSearchParams(location.search);
+    const code = p.get("error_code") || q.get("error_code") || p.get("error") || q.get("error");
+    if (!code) return null;
+    return { code, description: (p.get("error_description") || q.get("error_description") || "").replace(/\+/g, " ") };
+  })();
   const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" }
   });
@@ -63,9 +70,16 @@
 
   function ecranConnexion() {
     if (session) return;
-    const erreurLien = (lienRate || /error_description|error_code/.test(location.hash))
-      ? "Le lien de connexion que tu as ouvert n'est plus valable (il a expiré ou a déjà servi). Pas de souci : demande un nouveau lien ci-dessous, ou utilise Google." : "";
-    if (erreurLien) history.replaceState(null, "", location.pathname + location.search);
+    const LIEN = "Le lien de connexion que tu as ouvert n'est plus valable (il a expiré ou a déjà servi). Pas de souci : demande un nouveau lien ci-dessous, ou utilise Google.";
+    let erreurLien = lienRate ? LIEN : "";
+    if (erreurRetour) {
+      const lienEmail = /otp_expired|otp_disabled|flow_state_expired/.test(erreurRetour.code) || /email link|otp/i.test(erreurRetour.description);
+      erreurLien = lienEmail ? LIEN : erreurRetour.code === "access_denied" && !erreurRetour.description
+        ? "Connexion annulée. Tu peux réessayer, ou utiliser ton adresse e-mail."
+        : `La connexion n'a pas abouti${erreurRetour.description ? ` (message du serveur : « ${erreurRetour.description} »)` : ""}. Réessaie, ou utilise ton adresse e-mail. Si ça recommence, envoie une capture de ce message à l'équipe.`;
+      const q = new URLSearchParams(location.search); ["error", "error_code", "error_description"].forEach(k => q.delete(k));
+      history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
+    }
     $("#top").innerHTML = `<div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/></svg><span>Carnet d'étude</span></div>`;
     $("#app").innerHTML = `
       <div class="hello"><h1>Connexion</h1><p>Connecte-toi pour retrouver tes projets sur tous tes appareils. Pas besoin de compte Claude.</p></div>
