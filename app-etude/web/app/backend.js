@@ -617,8 +617,23 @@
   };
   const enBase64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
   let dernierQuota = null;
+  // Premier JSON valide trouvé dans un texte (tableau ou objet), même entouré de phrases ou dans un bloc ```json.
+  function extraireJson(texte) {
+    const t = String(texte || "").trim();
+    try { return JSON.parse(t); } catch { /* on cherche plus loin */ }
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i]; if (c !== "[" && c !== "{") continue;
+      const fin = c === "[" ? "]" : "}";
+      for (let j = t.lastIndexOf(fin); j > i; j = t.lastIndexOf(fin, j - 1)) {
+        try { return JSON.parse(t.slice(i, j + 1)); } catch { /* fin plus courte */ }
+      }
+    }
+    return undefined;
+  }
+  window.__extraireJson = extraireJson;   // pour les tests
+
   async function sample(input, opts = {}) {
-    const corps = { tier: opts.modelTier === "complex" ? "complex" : "default",
+    const corps = { tier: opts.modelTier === "complex" ? "complex" : "default", ...(opts.json ? { format: "plan" } : {}),
       tache: opts.tache || (opts.json ? "plan" : opts.images && opts.images.length ? "transcription" : opts.onText ? "seance" : "resume") };
     if (typeof input === "string") corps.prompt = input; else corps.messages = input;
     if (opts.images && opts.images.length) corps.images = await Promise.all(opts.images.map(async b => ({ media_type: b.type || "image/jpeg", data: await enBase64(b) })));
@@ -671,12 +686,15 @@
     }
     return { text: fin.text, truncated: !!fin.tronque, modelTierApplied: corps.tier };
   }
+  // Plan : la fonction serveur impose le format { etapes: [{ titre, detail }] } (sorties structurées).
+  // Lecture tolérante quand même : tableau seul, objet, bloc ```json, texte autour.
   sample.json = async (input, opts = {}) => {
     const r = await sample(input, { ...opts, json: true });
-    const t = r.text.replace(/^[\s\S]*?```(?:json)?\s*/i, m => (/```/.test(m) ? "" : m)).replace(/```[\s\S]*$/, "").trim();
-    const debut = t.search(/[[{]/);
-    try { return JSON.parse(debut >= 0 ? t.slice(debut) : t); }
-    catch { throw { code: "invalid_json" }; }
+    const v = extraireJson(r.text);
+    if (v === undefined) throw { code: "invalid_json" };
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") { const t = Array.isArray(v.etapes) ? v.etapes : Object.values(v).find(Array.isArray); if (t) return t; }
+    throw { code: "invalid_json" };
   };
   sample.limits = async () => ({ maxPromptBytes: 300000, images: { maxCount: 5, maxInputBytes: 3500000, mediaTypes: ["image/jpeg", "image/png"] } });
 

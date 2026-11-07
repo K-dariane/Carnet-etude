@@ -29,6 +29,26 @@ export const LIMITES = {
 const TYPES_IMAGE = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const TACHES = ["seance", "transcription", "plan", "resume", "autre"];
 
+/* Formats de réponse imposés à Claude (sorties structurées de l'API) : la réponse respecte exactement le schéma. */
+export const FORMATS: Record<string, Record<string, unknown>> = {
+  plan: {
+    type: "object",
+    properties: {
+      etapes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { titre: { type: "string" }, detail: { type: "string" } },
+          required: ["titre", "detail"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["etapes"],
+    additionalProperties: false,
+  },
+};
+
 export const MESSAGES_ERREUR: Record<string, string> = {
   session_expired: "Ta session a expiré : reconnecte-toi puis réessaie.",
   quota_atteint: "Tu as utilisé tout ton quota de la semaine. Il se remet à zéro lundi.",
@@ -82,7 +102,7 @@ function erreur(req: Request, deps: Deps, status: number, code: string, extra: R
 /* Valide la requête et construit les messages pour l'API. Renvoie un code d'erreur (avec la raison) ou les paramètres.
    Plusieurs messages du même rôle à la suite sont acceptés et regroupés : la V1 envoie les consignes et les supports
    dans un premier message « user », suivi directement de la question de l'étudiant. */
-export function preparer(body: unknown): { code: string; raison?: string } | { messages: Anthropic.Beta.BetaMessageParam[]; tier: "default" | "complex"; tache: string } {
+export function preparer(body: unknown): { code: string; raison?: string } | { messages: Anthropic.Beta.BetaMessageParam[]; tier: "default" | "complex"; tache: string; format?: string } {
   const refus = (raison: string) => ({ code: "requete_invalide", raison });
   if (!body || typeof body !== "object") return refus("corps de la demande absent ou illisible");
   const b = body as Record<string, unknown>;
@@ -123,17 +143,18 @@ export function preparer(body: unknown): { code: string; raison?: string } | { m
       { type: "text" as const, text: m.content },
     ] };
   });
-  return { messages, tier, tache };
+  if (b.format !== undefined && !(typeof b.format === "string" && FORMATS[b.format])) return refus(`format de réponse « ${String(b.format)} » inconnu`);
+  return { messages, tier, tache, ...(typeof b.format === "string" ? { format: b.format } : {}) };
 }
 
 /* Paramètres envoyés à Claude. */
-export function parametres(messages: Anthropic.Beta.BetaMessageParam[], tier: "default" | "complex") {
+export function parametres(messages: Anthropic.Beta.BetaMessageParam[], tier: "default" | "complex", format?: string) {
   const m = MODELES[tier];
   const p: Anthropic.Beta.MessageCreateParamsStreaming = {
     model: m.model,
     max_tokens: MAX_TOKENS,
     stream: true,
-    output_config: { effort: m.effort },
+    output_config: { effort: m.effort, ...(format && FORMATS[format] ? { format: { type: "json_schema" as const, schema: FORMATS[format] } } : {}) },
     cache_control: { type: "ephemeral" },  // met en cache tout le début de la conversation (consignes, supports)
     messages,
   };
@@ -182,7 +203,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   if (q.utilise >= q.limite) return erreur(req, deps, 429, "quota_atteint", { quota: q });
 
   // 4. Appel à Claude, relayé au fil de l'écriture
-  const params = parametres(prep.messages, prep.tier);
+  const params = parametres(prep.messages, prep.tier, prep.format);
   const ctl = new AbortController();
   req.signal?.addEventListener("abort", () => ctl.abort());
   const usage = { input_tokens: 0, cache_creation_tokens: 0, cache_read_tokens: 0, output_tokens: 0 };
