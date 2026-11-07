@@ -258,7 +258,7 @@ const TYPES = {
     mode: "Mode LIBRE : adapte-toi à la demande de l'étudiant." }
 };
 const RULES = [
-  "Tu es le tuteur personnel d'un étudiant universitaire, dans son « Carnet d'étude ». Réponds toujours en français.",
+  "Tu es le tuteur personnel d'un élève ou d'un étudiant, dans son « Carnet d'étude ». Réponds toujours en français.",
   "",
   "Style :",
   "- Clair et concis : va à l'essentiel, phrases courtes, une idée par paragraphe, pas de remplissage.",
@@ -268,6 +268,13 @@ const RULES = [
   "- Appuie-toi en priorité sur les supports de cours fournis et utilise leurs notations ; indique brièvement quand tu t'en sers (ex. « d'après ton cours *Nom* »). Si une information n'y figure pas, dis-le et réponds avec tes connaissances générales.",
   "- Termine si utile par une seule courte question ou proposition de suite."
 ].join("\n");
+/* Version web : consigne selon le niveau d'étude du profil (validée le 2026-11-07). */
+const NIVEAUX_IA = {
+  primaire: "Niveau de l'élève : primaire. Parle très simplement : phrases courtes, mots de tous les jours, exemples de la vie quotidienne, encouragements. Évite les formules compliquées.",
+  secondaire: "Niveau de l'élève : secondaire. Langage clair et accessible : notions expliquées pas à pas avec des exemples, vocabulaire du programme expliqué.",
+  universitaire: "Niveau de l'étudiant : universitaire."
+};
+const consigneNiveau = () => { const n = window.carnetWeb && carnetWeb.niveau && carnetWeb.niveau(); return NIVEAUX_IA[n] ? "\n\n" + NIVEAUX_IA[n] : ""; };
 const RULES_CHAT = RULES
   .replace(/^Tu es le tuteur[^\n]*/, "Tu es le tuteur personnel d'un étudiant universitaire. Il a préparé cette demande avec son « Carnet d'étude ». Réponds toujours en français.")
   .replace(/- Illustrations :[^\n]*/, "- Illustrations : dès qu'une notion est abstraite ou spatiale, ajoute un schéma simple et juste (visuel ou SVG).");
@@ -479,7 +486,7 @@ function renderTop() {
   const t = $("#top");
   if (S.view === "home" || !S.ready) {
     t.innerHTML = `<div class="brand">${ICON_BOOK}<span>Carnet d'étude</span></div><span class="spacer"></span>` +
-      (S.ready ? `<button class="btn primary" data-a="new">+ Nouveau projet</button><button class="btn ghost" data-a="logout" title="${esc(window.carnetWeb && carnetWeb.email() || "")}">Se déconnecter</button>` : "");
+      (S.ready ? `<button class="btn primary" data-a="new">+ Nouveau projet</button><button class="btn iconbtn ghost" data-a="compte" aria-label="Mon compte" title="Mon compte${window.carnetWeb && carnetWeb.email() ? " (" + esc(carnetWeb.email()) + ")" : ""}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>` : "");
   } else {
     const p = S.view === "projet" ? proj() : null;
     t.innerHTML = `<button class="btn iconbtn ghost" data-a="home" aria-label="Retour aux projets"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
@@ -869,7 +876,7 @@ async function send() {
   write(ref, () => ref.set({ turns: storeTurns(thread) }));
 
   // Construction de la requête
-  const head = RULES + "\n\n" + t.mode + "\n\n" + projectContext(p);
+  const head = RULES + consigneNiveau() + "\n\n" + t.mode + "\n\n" + projectContext(p);
   let room = INPUT_BUDGET - bytes(head) - 2000;
   const convo = [];
   for (let i = thread.length - 1; i >= 0; i--) {
@@ -1116,7 +1123,7 @@ async function genPlan(btn) {
   btn.disabled = true; btn.textContent = "Claude prépare le plan…";
   try {
     const out = await S.sample.json(
-      RULES.split("\n")[0] + "\n\n" + projectContext(p, 40000) +
+      RULES.split("\n")[0] + consigneNiveau() + "\n\n" + projectContext(p, 40000) +
       "\n\n---\nPropose un plan de travail réaliste en 4 à 10 étapes concrètes et ordonnées pour atteindre l'objectif de ce projet" +
       (p.echeance ? ", en tenant compte de l'échéance" : "") + ", en t'appuyant sur les supports. " +
       'Réponds uniquement avec un tableau JSON d\'objets {"titre": string (60 caractères max), "detail": string (150 caractères max)}. ' +
@@ -1135,7 +1142,7 @@ document.addEventListener("click", async ev => {
   const a = b.dataset.a;
   if (a === "toggle-sup" || a === "toggle-step") return; // gérés par "change"
   switch (a) {
-    case "logout": if (!armed(b)) break; window.carnetWeb.deconnexion(); break;
+    case "compte": window.carnetWeb.compte(); break;
     case "home": if (S.view === "form" && S.editId) { S.view = "projet"; S.editId = null; render(); } else closeProject(); break;
     case "back-projet": S.view = "projet"; S.editId = null; render(); break;
     case "new": closeSubs(); S.view = "form"; S.editId = null; S.current = null; render(); break;

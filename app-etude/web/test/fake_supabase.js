@@ -6,7 +6,7 @@
 (() => {
   const CLE = "__fake_supabase";
   const charger = () => { try { return JSON.parse(localStorage.getItem(CLE)); } catch { return null; } };
-  const st = charger() || { session: null, tables: { projets: [], supports: [], fils: [] }, fichiers: {}, emails: [], oauth: [], echecs: {} };
+  const st = charger() || { session: null, tables: { projets: [], supports: [], fils: [], profils: [] }, fichiers: {}, emails: [], oauth: [], echecs: {}, comptes: [] };
   const sauver = () => localStorage.setItem(CLE, JSON.stringify(st));
   window.__fake = st; window.__fakeSave = sauver;
   const ecouteurs = new Set();
@@ -14,12 +14,14 @@
   const uid = () => st.session && st.session.user.id;
   const maintenant = () => new Date().toISOString();
   const DEFAUTS = {
+    profils: () => ({ prenom: "", accord_parental: false, created_at: maintenant(), updated_at: maintenant() }),
     projets: () => ({ type: "autre", matiere: "", objectif: "", echeance: null, parent_id: null, focus: null, nb_supports: 0, plan: [], evolutions: [], extra: {}, created_at: maintenant(), updated_at: maintenant() }),
     supports: () => ({ nom: "", texte: "", actif: true, url: null, asset_id: null, pages: null, tronque: null, herite: null, extra: {}, created_at: maintenant() }),
     fils: () => ({ id: "principal", turns: [], updated_at: maintenant() }),
   };
-  const CLES = { projets: ["id"], supports: ["id"], fils: ["projet_id", "id"] };
+  const CLES = { projets: ["id"], supports: ["id"], fils: ["projet_id", "id"], profils: ["owner"] };
   const COLONNES = {
+    profils: ["owner", "prenom", "niveau", "majeur", "accord_parental", "created_at", "updated_at"],
     projets: ["id", "owner", "titre", "type", "matiere", "objectif", "echeance", "parent_id", "focus", "nb_supports", "plan", "evolutions", "extra", "created_at", "updated_at"],
     supports: ["id", "owner", "projet_id", "nom", "kind", "texte", "actif", "url", "asset_id", "pages", "tronque", "herite", "extra", "created_at"],
     fils: ["owner", "projet_id", "id", "turns", "updated_at"],
@@ -29,6 +31,7 @@
   const verifier = (table, row) => {
     for (const k of Object.keys(row)) if (!COLONNES[table].includes(k)) return `column "${k}" of relation "${table}" does not exist`;
     if (row.owner !== uid()) return "new row violates row-level security policy";
+    if (table === "profils") return !["primaire", "secondaire", "universitaire"].includes(row.niveau) || typeof row.majeur !== "boolean" || !(row.majeur || row.accord_parental) ? "violates check constraint" : null;
     if (table !== "projets" && !st.tables.projets.some(p => p.id === row.projet_id && p.owner === row.owner)) return "violates foreign key constraint";
     if (table === "projets" && !row.titre) return "violates check constraint";
     if (typeof row.echeance === "string" && row.echeance === "") return 'invalid input syntax for type date: ""';
@@ -102,22 +105,62 @@
     },
   });
 
+  // Comptes : { id, email, password, confirme, metadata, providers }. Le code valable est toujours 123456.
+  const idPour = email => email === "moi@test.cd" ? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" : email.startsWith("b") ? "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    : "cccccccc-cccc-4ccc-8ccc-" + Array.from(email).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(16).padStart(12, "0").slice(0, 12);
+  const compte = email => st.comptes.find(c => c.email === email);
+  const ouvrir = (c, evt = "SIGNED_IN") => {
+    st.session = { access_token: "jeton-" + c.email, user: { id: c.id, email: c.email, user_metadata: c.metadata || {}, app_metadata: { providers: c.providers || ["email"] } } };
+    sauver(); emettre(evt, st.session); return { data: { session: st.session, user: st.session.user }, error: null };
+  };
   const auth = {
     async getSession() { return { data: { session: st.session }, error: null }; },
     onAuthStateChange(cb) { ecouteurs.add(cb); setTimeout(() => cb("INITIAL_SESSION", st.session), 0); return { data: { subscription: { unsubscribe: () => ecouteurs.delete(cb) } } }; },
+    async signUp({ email, password, options = {} }) {
+      st.inscriptions = (st.inscriptions || []).concat([{ email, data: options.data, redirect: options.emailRedirectTo }]);
+      if (password.length < 8) { sauver(); return { data: { user: null, session: null }, error: { message: "Password should be at least 8 characters.", code: "weak_password", status: 422 } }; }
+      if (compte(email)) { sauver(); return { data: { user: { id: compte(email).id, identities: [] }, session: null }, error: null }; }
+      st.comptes.push({ id: idPour(email), email, password, confirme: false, metadata: options.data || {} });
+      st.emails.push({ email, type: "signup", redirect: options.emailRedirectTo }); sauver();
+      return { data: { user: { id: idPour(email), identities: [{ provider: "email" }] }, session: null }, error: null };
+    },
+    async signInWithPassword({ email, password }) {
+      const c = compte(email);
+      if (!c || c.password !== password) return { data: { session: null }, error: { message: "Invalid login credentials", code: "invalid_credentials", status: 400 } };
+      if (!c.confirme) return { data: { session: null }, error: { message: "Email not confirmed", code: "email_not_confirmed", status: 400 } };
+      return ouvrir(c);
+    },
     async signInWithOtp({ email, options }) {
       if (st.echecs.otp) return { data: null, error: { message: st.echecs.otp, status: 429 } };
-      st.emails.push({ email, redirect: options && options.emailRedirectTo }); sauver(); return { data: {}, error: null };
+      st.emails.push({ email, type: "magiclink", redirect: options && options.emailRedirectTo }); sauver(); return { data: {}, error: null };
     },
+    async resetPasswordForEmail(email, o = {}) { st.emails.push({ email, type: "recovery", redirect: o.redirectTo }); sauver(); return { data: {}, error: null }; },
+    async resend({ type, email }) { st.emails.push({ email, type: "renvoi-" + type }); sauver(); return { data: {}, error: null }; },
     async verifyOtp({ email, token, token_hash, type }) {
       st.verifications = (st.verifications || []).concat([{ token_hash, type }]);
-      if (token_hash) { if (token_hash !== "hash-valide") { sauver(); return { data: null, error: { message: "Email link is invalid or has expired", status: 403 } }; } email = "moi@test.cd"; token = "123456"; }
-      if (token !== "123456") return { data: null, error: { message: "Token has expired or is invalid", status: 403 } };
-      st.session = { access_token: "jeton-" + email, user: { id: email.startsWith("b") ? "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" : "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email } };
-      sauver(); emettre("SIGNED_IN", st.session); return { data: { session: st.session }, error: null };
+      if (token_hash) {
+        if (!/^hash-valide/.test(token_hash)) { sauver(); return { data: null, error: { message: "Email link is invalid or has expired", status: 403 } }; }
+        email = "moi@test.cd"; token = "123456";
+      }
+      if (token !== "123456") { sauver(); return { data: null, error: { message: "Token has expired or is invalid", code: "otp_expired", status: 403 } }; }
+      let c = compte(email);
+      if (!c) { c = { id: idPour(email), email, password: null, confirme: true, metadata: {} }; st.comptes.push(c); }
+      c.confirme = true;
+      return ouvrir(c, type === "recovery" ? "PASSWORD_RECOVERY" : "SIGNED_IN");
+    },
+    async updateUser({ password }) {
+      if (!st.session) return { data: null, error: { message: "Auth session missing!", status: 401 } };
+      if (password.length < 8) return { data: null, error: { message: "Password should be at least 8 characters.", code: "weak_password", status: 422 } };
+      const c = compte(st.session.user.email); if (c) { c.password = password; c.providers = [...new Set([...(c.providers || ["email"]), "email"])]; }
+      sauver(); emettre("USER_UPDATED", st.session); return { data: { user: st.session.user }, error: null };
     },
     async signInWithOAuth({ provider, options }) { st.oauth.push({ provider, redirectTo: options && options.redirectTo }); sauver(); return { data: {}, error: null }; },
     async signOut() { st.session = null; sauver(); emettre("SIGNED_OUT", null); return { error: null }; },
+  };
+  // Pour les tests : simule le retour d'une connexion Google (compte sans profil, prénom fourni par Google).
+  window.__fakeOAuth = (email, nom) => {
+    let c = compte(email); if (!c) { c = { id: idPour(email), email, password: null, confirme: true, metadata: { full_name: nom }, providers: ["google"] }; st.comptes.push(c); }
+    st.session = { access_token: "jeton-" + email, user: { id: c.id, email, user_metadata: c.metadata, app_metadata: { providers: c.providers } } }; sauver();
   };
 
   window.supabase = { createClient: (url, key, o) => { st.client = { url, key, flowType: o && o.auth && o.auth.flowType }; return { auth, from: t => new Requete(t), storage: { from: stockage } }; } };

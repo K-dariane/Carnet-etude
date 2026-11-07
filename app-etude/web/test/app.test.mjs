@@ -16,6 +16,7 @@ const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
 let browser, ctx, pg, erreurs = [], appels = [], refusees = [], reponseChat = null;
+let reglages = { external: { email: true, google: true, facebook: false, apple: false } };
 const REPONSE = "### Intégration par parties\nD'après ton cours *cours*, \\[ \\int u v' = [uv] - \\int u' v \\]\n- Résultat : \\(x e^x - e^x + C\\)";
 const ndjson = (texte, extra = {}) => texte.match(/[\s\S]{1,25}/g).map(d => JSON.stringify({ type: "texte", delta: d })).join("\n") + "\n" +
   JSON.stringify({ type: "fin", text: texte, tronque: false, modele: "claude-haiku-5-5", tokens: 1234, quota: { utilise: 1234, limite: 500000, reinitialisation: "2026-11-09T00:00:00+01:00" }, ...extra }) + "\n";
@@ -41,6 +42,7 @@ async function contexte() {
     if (f === "/config.js") return r.fulfill({ contentType: "text/javascript", body: 'window.CARNET_CONFIG = { supabaseUrl: "https://fake.supabase.test", supabaseAnonKey: "cle-publique-test" };' });
     r.fulfill({ path: join(web, "app", f) });
   });
+  await c.route("https://fake.supabase.test/auth/v1/settings", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(reglages) }));
   await c.route("https://fake.supabase.test/storage/**", r => r.fulfill({ body: PNG, contentType: "image/png" }));
   await c.route("https://fake.supabase.test/functions/v1/chat", async r => {
     const body = JSON.parse(r.request().postData()); const headers = r.request().headers();
@@ -62,27 +64,54 @@ const attendre = (fn, ms = 8000) => pg.waitForFunction(fn, null, { timeout: ms }
 before(async () => { browser = await chromium.launch(); ctx = await contexte(); pg = await nouvellePage(ctx); });
 after(async () => { await browser.close(); });
 
-test("connexion : écran affiché, e-mail vérifié, lien envoyé, code faux refusé, bon code accepté", async () => {
+test("création de compte : formulaire vérifié, e-mail d'activation, code, profil enregistré", async () => {
   await pg.goto("http://carnet.test/");
-  await pg.waitForSelector("#login");
+  await pg.waitForSelector("#f-connexion");
   assert.match(await pg.textContent("#app"), /Pas besoin de compte Claude/);
-  assert.equal(await pg.isVisible("#login-code"), false, "la zone du code n'apparaît qu'après l'envoi du lien");
+  await pg.waitForSelector("#login-google");
+  assert.equal(await pg.locator("#login-facebook, #login-apple").count(), 0, "Facebook et Apple cachés tant qu'ils ne sont pas activés");
   assert.equal(await pg.isVisible("#login-err"), false);
-  await pg.fill("#login-email", "pas-une-adresse"); await pg.click("#login-send");
-  assert.equal(await pg.textContent("#login-err"), "Écris une adresse e-mail valide.");
-  await pg.fill("#login-email", "Moi@Test.cd"); await pg.click("#login-send");
-  await pg.waitForSelector("#login-code:not([hidden])");
-  assert.match(await pg.textContent("#login-sent"), /Lien envoyé à moi@test\.cd/);
-  assert.equal(await pg.isVisible("#login-code"), true); assert.equal(await pg.isVisible("#login-form"), false);
+  await pg.click("[data-vue-aller=inscription]"); await pg.waitForSelector("#f-inscription");
+  const err = () => pg.textContent("#login-err");
+  await pg.click("#i-go"); assert.equal(await err(), "Écris ton prénom.");
+  await pg.fill("#i-prenom", "Moi"); await pg.fill("#i-email", "Moi@Test.cd"); await pg.fill("#i-mdp", "court1"); await pg.click("#i-go");
+  assert.match(await err(), /au moins 8 caractères/);
+  await pg.fill("#i-mdp", "motdepasse1"); await pg.fill("#i-mdp2", "autrechose1"); await pg.click("#i-go");
+  assert.equal(await err(), "Les deux mots de passe ne sont pas identiques.");
+  await pg.fill("#i-mdp2", "motdepasse1"); await pg.click("#i-go"); assert.equal(await err(), "Choisis ton niveau d'étude.");
+  await pg.check("#i-niveau-secondaire"); await pg.click("#i-go"); assert.equal(await err(), "Indique si tu as 18 ans ou plus.");
+  assert.equal(await pg.isVisible("#i-accord"), false);
+  await pg.check("#i-majeur-non"); assert.equal(await pg.isVisible("#i-accord"), true);
+  await pg.click("#i-go"); assert.match(await err(), /accord d'un parent/);
+  await pg.check("#i-accord");
+  await pg.click("[data-voir=i-mdp]"); assert.equal(await pg.getAttribute("#i-mdp", "type"), "text", "bouton 👁 : mot de passe affiché");
+  await pg.click("#i-go");
+  await pg.waitForSelector("#f-verif");
+  assert.match(await pg.textContent("#login-info"), /moi@test\.cd/);
   let f = await fake();
-  assert.deepEqual(f.emails, [{ email: "moi@test.cd", redirect: "http://carnet.test/" }]);
+  assert.deepEqual(f.inscriptions[0], { email: "moi@test.cd", redirect: "http://carnet.test/", data: { prenom: "Moi", niveau: "secondaire", majeur: false, accord_parental: true } });
   assert.equal(f.client.key, "cle-publique-test"); assert.equal(f.client.flowType, "implicit");
-  await pg.fill("#login-otp", "000000"); await pg.click("#login-verify");
-  await attendre(() => !document.querySelector("#login-err").hidden);
-  assert.match(await pg.textContent("#login-err"), /Code incorrect ou expiré/);
-  await pg.fill("#login-otp", "123456"); await pg.click("#login-verify");
+  await pg.click("#v-renvoyer"); await attendre(() => window.__fake.emails.some(e => e.type === "renvoi-signup"));
+  await pg.fill("#v-code", "000000"); await pg.click("#v-go");
+  await attendre(() => /Code incorrect ou expiré/.test(document.querySelector("#login-err").textContent));
+  await pg.fill("#v-code", "123456"); await pg.click("#v-go");
   await pg.waitForSelector("#pform");
   assert.match(await pg.textContent("#app"), /Bienvenue dans ton carnet/);
+  f = await fake();
+  assert.deepEqual(f.tables.profils.map(({ owner, prenom, niveau, majeur, accord_parental }) => ({ owner, prenom, niveau, majeur, accord_parental })),
+    [{ owner: A, prenom: "Moi", niveau: "secondaire", majeur: false, accord_parental: true }]);
+});
+
+test("compte déjà existant : message clair, pas de second compte", async () => {
+  const c2 = await contexte(); const p2 = await nouvellePage(c2);
+  await p2.goto("http://carnet.test/"); await p2.waitForSelector("#f-connexion");
+  await p2.evaluate(d => { window.__fake.comptes = d; window.__fakeSave(); }, (await fake()).comptes);
+  await p2.click("[data-vue-aller=inscription]"); await p2.waitForSelector("#f-inscription");
+  await p2.fill("#i-prenom", "Moi"); await p2.fill("#i-email", "moi@test.cd"); await p2.fill("#i-mdp", "motdepasse2"); await p2.fill("#i-mdp2", "motdepasse2");
+  await p2.check("#i-niveau-universitaire"); await p2.check("#i-majeur-oui"); await p2.click("#i-go");
+  await p2.waitForFunction(() => /existe déjà/.test(document.querySelector("#login-err").textContent));
+  assert.equal(await p2.evaluate(() => window.__fake.comptes.length), 1);
+  await c2.close();
 });
 
 test("projet : enregistré dans la table projets avec les champs de la V1", async () => {
@@ -116,6 +145,7 @@ test("plan : généré par Claude via la fonction serveur, étape cochée", asyn
   await pg.click("[data-tab=plan]"); await pg.click("#genplan"); await pg.waitForSelector(".step");
   const a = appels.at(-1);
   assert.equal(a.body.tache, "plan"); assert.equal(a.body.tier, "default"); assert.equal(typeof a.body.prompt, "string");
+  assert.ok(a.body.prompt.includes("Niveau de l'élève : secondaire."), "niveau aussi pour le plan");
   assert.equal(a.headers.authorization, "Bearer jeton-moi@test.cd"); assert.equal(a.headers.apikey, "cle-publique-test");
   await pg.click(".step input[type=checkbox]");
   await attendre(() => window.__fake.tables.projets[0].plan.length === 3 && window.__fake.tables.projets[0].plan[0].fait === true);
@@ -133,6 +163,8 @@ test("séance : réponse affichée, contexte avec les supports, conversation enr
   assert.equal(a.body.messages[0].role, "user");
   assert.ok(a.body.messages[0].content.includes("Integration par parties") && a.body.messages[0].content.includes("LIATE"));
   assert.equal(a.body.messages.at(-1).content, "Explique-moi l’IPP avec x e^x");
+  assert.ok(a.body.messages[0].content.startsWith("Tu es le tuteur personnel d'un élève ou d'un étudiant, dans son « Carnet d'étude »."));
+  assert.ok(a.body.messages[0].content.includes("Niveau de l'élève : secondaire. Langage clair et accessible"), "consigne de niveau envoyée à Claude");
   await attendre(() => (window.__fake.tables.fils[0] || {}).turns?.length === 2);
   const fil = (await fake()).tables.fils[0];
   assert.equal(fil.id, "principal"); assert.deepEqual(fil.turns.map(t => t.role), ["user", "assistant"]);
@@ -208,27 +240,78 @@ test("suppression d'un support : fichier supprimé du stockage", async () => {
   assert.ok((await fake()).tables.supports.some(s => s.kind === "pdf" && s.herite), "la copie du sous-projet reste");
 });
 
-test("autre testeur : ne voit aucun projet de A ; Google proposé", async () => {
+test("autre testeur venu par Google : choisit son niveau à la première connexion, ne voit rien de A", async () => {
   const c2 = await contexte(); const p2 = await nouvellePage(c2);
-  await p2.goto("http://carnet.test/"); await p2.waitForSelector("#login");
+  await p2.goto("http://carnet.test/"); await p2.waitForSelector("#login-google");
   await p2.click("#login-google");
   await p2.waitForFunction(() => window.__fake.oauth.length === 1);
   assert.deepEqual(await p2.evaluate(() => window.__fake.oauth[0]), { provider: "google", redirectTo: "http://carnet.test/" });
   // Le faux Supabase est propre à chaque navigateur : on y recopie les données de A pour vérifier le filtrage.
   const donnees = await fake();
-  await p2.evaluate(d => { window.__fake.tables = d.tables; window.__fakeSave(); }, donnees);
-  await p2.fill("#login-email", "b@test.cd"); await p2.click("#login-send"); await p2.waitForSelector("#login-code:not([hidden])");
-  await p2.fill("#login-otp", "123456"); await p2.click("#login-verify");
+  await p2.evaluate(d => { window.__fake.tables = d.tables; window.__fakeOAuth("b@test.cd", "Bob Martin"); window.__fakeSave(); }, donnees);
+  await p2.reload(); await p2.waitForSelector("#f-profil");
+  assert.equal(await p2.inputValue("#p-prenom"), "Bob", "prénom repris du compte Google");
+  await p2.click("#p-go"); await p2.waitForFunction(() => /Choisis ton niveau/.test(document.querySelector("#login-err").textContent));
+  await p2.check("#p-niveau-universitaire"); await p2.check("#p-majeur-oui"); await p2.click("#p-go");
   await p2.waitForSelector("#pform");
   assert.match(await p2.textContent("#app"), /Bienvenue/, "B arrive sur un carnet vide");
+  assert.equal(await p2.evaluate(() => window.__fake.tables.profils.find(p => p.owner.startsWith("bbbb")).niveau), "universitaire");
   await c2.close();
 });
 
-test("déconnexion en deux clics, retour à l'écran de connexion", async () => {
-  await pg.click("[data-a=home]").catch(() => {}); await pg.waitForSelector("[data-a=logout]");
-  await pg.click("[data-a=logout]"); assert.equal(await pg.textContent("[data-a=logout]"), "Confirmer ?");
-  await Promise.all([pg.waitForEvent("load"), pg.click("[data-a=logout]")]);
-  await pg.waitForSelector("#login");
+test("Mon compte : niveau modifié (et pris en compte par Claude), puis déconnexion en deux clics", async () => {
+  await pg.click("[data-a=home]").catch(() => {}); await pg.waitForSelector("[data-a=compte]");
+  await pg.click("[data-a=compte]"); await pg.waitForSelector("#compte");
+  assert.equal(await pg.inputValue("#m-prenom"), "Moi");
+  assert.equal(await pg.isChecked("#m-niveau-secondaire"), true);
+  await pg.check("#m-niveau-universitaire"); await pg.check("#m-majeur-oui"); await pg.click("#m-go");
+  await attendre(() => /Profil enregistré/.test(document.querySelector("#compte-err").textContent));
+  assert.equal((await fake()).tables.profils[0].niveau, "universitaire");
+  assert.equal(await pg.isVisible("#m-mdp"), false, "section mot de passe repliée par défaut");
+  await pg.click("#compte summary"); await pg.fill("#m-mdp", "nouveaumdp2"); await pg.fill("#m-mdp2", "nouveaumdp2"); await pg.click("#m-mdp-go");
+  await attendre(() => /Mot de passe enregistré/.test(document.querySelector("#compte-err").textContent));
+  await pg.click("#compte-fermer"); assert.equal(await pg.locator("#compte").count(), 0);
+  await pg.click(".cards > .card"); await pg.waitForSelector("#msg");
+  await pg.fill("#msg", "Et maintenant ?"); await pg.click("#sendbtn");
+  await attendre(() => !document.querySelector("[data-a=stop]") && document.querySelectorAll(".msg.assistant").length >= 3, 15000);
+  assert.ok(appels.at(-1).body.messages[0].content.includes("Niveau de l'étudiant : universitaire."));
+  await pg.click("[data-a=home]"); await pg.click("[data-a=compte]"); await pg.waitForSelector("#m-sortir");
+  await pg.click("#m-sortir"); assert.equal(await pg.textContent("#m-sortir"), "Confirmer ?");
+  await Promise.all([pg.waitForEvent("load"), pg.click("#m-sortir")]);
+  await pg.waitForSelector("#f-connexion");
+});
+
+test("connexion par mot de passe : mauvais mot de passe refusé, bon accepté", async () => {
+  await pg.fill("#c-email", "moi@test.cd"); await pg.fill("#c-mdp", "faux12345"); await pg.click("#c-go");
+  await attendre(() => /incorrect/.test(document.querySelector("#login-err").textContent));
+  assert.equal(await pg.textContent("#login-err"), "Adresse e-mail ou mot de passe incorrect.");
+  await pg.fill("#c-mdp", "nouveaumdp2"); await pg.click("#c-go");
+  await pg.waitForSelector(".card");
+  await pg.click("[data-a=compte]"); await pg.click("#m-sortir"); await Promise.all([pg.waitForEvent("load"), pg.click("#m-sortir")]);
+  await pg.waitForSelector("#f-connexion");
+});
+
+test("mot de passe oublié : e-mail, code, nouveau mot de passe, reconnexion", async () => {
+  await pg.click("#lien-oubli"); await pg.waitForSelector("#f-o-email");
+  await pg.fill("#o-email", "moi@test.cd"); await pg.click("#o-send"); await pg.waitForSelector("#f-o-code:not([hidden])");
+  assert.match(await pg.textContent("#o-sent"), /Si un compte existe avec moi@test\.cd/);
+  assert.deepEqual((await fake()).emails.at(-1), { email: "moi@test.cd", type: "recovery", redirect: "http://carnet.test/" });
+  await pg.fill("#o-code", "123456"); await pg.click("#o-go");
+  await pg.waitForSelector("#f-nouveau");
+  await pg.fill("#n-mdp", "recupere123"); await pg.fill("#n-mdp2", "recupere12"); await pg.click("#n-go");
+  assert.equal(await pg.textContent("#login-err"), "Les deux mots de passe ne sont pas identiques.");
+  await pg.fill("#n-mdp2", "recupere123"); await pg.click("#n-go");
+  await pg.waitForSelector(".card");
+  assert.equal((await fake()).comptes.find(c => c.email === "moi@test.cd").password, "recupere123");
+});
+
+test("connexion par code (sans mot de passe) : toujours possible en secours", async () => {
+  await pg.click("[data-a=compte]"); await pg.click("#m-sortir"); await Promise.all([pg.waitForEvent("load"), pg.click("#m-sortir")]);
+  await pg.waitForSelector("#lien-code"); await pg.click("#lien-code");
+  await pg.fill("#k-email", "moi@test.cd"); await pg.click("#k-send"); await pg.waitForSelector("#f-k-code:not([hidden])");
+  assert.equal((await fake()).emails.at(-1).type, "magiclink");
+  await pg.fill("#k-code", "123456"); await pg.click("#k-go");
+  await pg.waitForSelector(".card");
 });
 
 test("base injoignable : message clair, pas de mode local", async () => {
