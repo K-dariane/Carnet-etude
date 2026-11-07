@@ -247,7 +247,8 @@
       <div class="liens"><button type="button" class="btn ghost" id="p-sortir">Me déconnecter</button></div>`;
     }
     const msg = vue === "connexion" ? messageRetour() : (opts.message || "");
-    app.innerHTML = haut + corps + `<p class="err" id="login-err" role="alert" ${msg ? "" : "hidden"}>${esc(msg)}</p></div>`;
+    app.innerHTML = haut + corps + `<p class="err" id="login-err" role="alert" ${msg ? "" : "hidden"}>${esc(msg)}</p></div>
+      <p class="hint pied"><a href="confidentialite.html">Confidentialité et suppression des données</a></p>`;
     const err = m => { const e = $("#login-err"); e.textContent = m; e.hidden = !m; if (m) e.scrollIntoView({ block: "nearest" }); };
     brancherVoir(app);
     app.querySelectorAll("[data-vue-aller]").forEach(b => b.onclick = () => ecran(b.dataset.vueAller));
@@ -376,7 +377,8 @@
           <button class="btn" type="submit" id="m-mdp-go">Enregistrer le mot de passe</button>
         </form></details>
       <p class="err" id="compte-err" role="alert" hidden></p>
-      <div class="row" style="justify-content:space-between"><button class="btn danger" type="button" id="m-sortir">Se déconnecter</button></div>
+      <div class="row" style="justify-content:space-between"><button class="btn danger" type="button" id="m-sortir">Se déconnecter</button>
+        <a class="hint" href="confidentialite.html">Confidentialité, supprimer mon compte</a></div>
     </div>`;
     document.body.appendChild(fond);
     const err = (m, ok) => { const e = $("#compte-err"); e.textContent = m; e.hidden = !m; e.style.color = ok ? "var(--ok)" : ""; };
@@ -422,7 +424,8 @@
     input[type=password] { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
     .compte-fond { position: fixed; inset: 0; background: rgba(10, 14, 30, .55); z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow: auto; }
     .compte { background: var(--paper); color: var(--ink); border-radius: var(--radius); padding: 18px; width: 100%; max-width: 520px; display: grid; gap: 14px; margin-top: 4vh; }
-    .compte details summary { cursor: pointer; font-weight: 700; padding: 6px 0; }`;
+    .compte details summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
+    .pied { text-align: center; margin: 18px 0 0; } .pied a, .compte a.hint { color: var(--muted); }`;
   document.head.appendChild(style);
 
   /* ---------- Fichiers : références « storage:supports/<chemin> » ↔ liens temporaires ---------- */

@@ -51,7 +51,26 @@ https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback
 
 4. **Fusionner la pull request** : l'app se met à jour toute seule en 1 à 2 minutes.
 
-## 1. Google : régler le problème « lien expiré »
+## 1. Google : l'identité de l'app (Branding), à remplir avant de publier
+
+Google Cloud (https://console.cloud.google.com/) → ton projet → **Google Auth Platform** → **Branding** :
+
+| Champ | Valeur |
+| --- | --- |
+| App name | `Carnet d'étude` |
+| User support email | ton adresse Gmail |
+| App logo | **laisse vide pour l'instant** : un logo déclenche une vérification par Google, qui prend plusieurs jours |
+| Application home page | `https://k-dariane.github.io/Carnet-etude/` |
+| Application privacy policy link | `https://k-dariane.github.io/Carnet-etude/confidentialite.html` |
+| Application terms of service link | laisse vide (pas encore de conditions d'utilisation) |
+| Authorized domains | ajoute `k-dariane.github.io` puis `supabase.co` |
+| Developer contact information | ton adresse Gmail |
+
+Clique sur **Save**. Ensuite seulement, **Audience** → **Publier l'application**.
+
+Pour le nom, l'e-mail et le profil seulement (les informations de base), Google ne demande pas de vérification. Tant que l'app n'est pas vérifiée, la page Google peut afficher l'adresse `xyrlifukufcntwinrtvz.supabase.co` au lieu de « Carnet d'étude ». C'est normal.
+
+## 2. Google : régler le problème « lien expiré »
 
 Supabase et Google acceptent bien la demande : la page « Choisir un compte » s'affiche. Le problème arrive **après** le choix du compte. Vérifie dans l'ordre :
 
@@ -65,7 +84,7 @@ Supabase et Google acceptent bien la demande : la page « Choisir un compte » s
    - Redirect URLs `https://k-dariane.github.io/Carnet-etude/**`.
 5. **Réessaie sur l'app.** La nouvelle version affiche le **vrai message** de Supabase au lieu de « lien expiré ». Si ça bloque encore, fais une capture de ce message.
 
-## 2. Facebook (gratuit, environ 1 h)
+## 3. Facebook (gratuit, environ 1 h)
 
 1. Va sur https://developers.facebook.com/ → **Mes apps** → **Créer une app**.
    - Cas d'utilisation : **Authentifier les utilisateurs avec Facebook Login** (« Authenticate and request data from users with Facebook Login »).
@@ -74,13 +93,14 @@ Supabase et Google acceptent bien la demande : la page « Choisir un compte » s
    - **URI de redirection OAuth valides** : `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`
    - Permissions : `email` et `public_profile` (déjà présentes par défaut).
 3. **Paramètres de l'app** → **Général** : note l'**ID de l'app** et la **Clé secrète**. Remplis aussi :
-   - **URL de la politique de confidentialité** et **URL des instructions de suppression des données** : ces deux pages n'existent pas encore. Dis-moi quand tu en es là : je les crée dans l'app, avec ton adresse de contact, à faire relire.
+   - **URL de la politique de confidentialité** : `https://k-dariane.github.io/Carnet-etude/confidentialite.html`
+   - **URL des instructions de suppression des données** : `https://k-dariane.github.io/Carnet-etude/confidentialite.html#suppression`
 4. Supabase → **Authentication** → **Sign In / Providers** → **Facebook** : active-le, colle l'**ID** dans **Facebook client ID** et la **clé secrète** dans **Facebook secret**, puis **Save**.
 5. De retour chez Meta : passe l'app en mode **Live** (« En ligne ») en haut de la page. En mode « Développement », seuls toi et les testeurs ajoutés à l'app peuvent se connecter.
 
 Le bouton « Continuer avec Facebook » apparaît tout seul dans l'app dès que Facebook est activé dans Supabase.
 
-## 3. Mot de passe oublié et récupération du compte
+## 4. Mot de passe oublié et récupération du compte
 
 | Situation | Solution dans l'app |
 | --- | --- |
@@ -90,7 +110,7 @@ Le bouton « Continuer avec Facebook » apparaît tout seul dans l'app dès que 
 | Plus d'accès à son adresse e-mail | Toi, dans Supabase → **Authentication** → **Users** → la personne → changer son adresse, ou **Send password recovery** |
 | Plus tard : par SMS | Code par SMS au numéro de téléphone (service Twilio, payant, environ 0,05 à 0,15 $ par SMS vers la RDC, à vérifier) |
 
-## 4. Mineurs (niveaux primaire et secondaire)
+## 5. Mineurs (niveaux primaire et secondaire)
 
 - **À la création du compte** : l'app demande « As-tu 18 ans ou plus ? ». Si la réponse est non, il faut cocher « Un parent ou un tuteur est d'accord ». La base refuse un mineur sans cet accord.
 - **À préciser avant l'ouverture au public** :

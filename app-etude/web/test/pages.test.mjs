@@ -122,3 +122,15 @@ test("Facebook : bouton affiché dès qu'il est activé dans Supabase ; jamais d
   await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#f-connexion"); await pg.waitForTimeout(300);
   assert.equal(await pg.locator("[data-fournisseur]").count(), 0, "aucun bouton si aucun fournisseur");
 });
+
+test("page de confidentialité : en ligne, liée depuis l'écran de connexion, avec la section suppression (Google, Facebook)", async () => {
+  reglages = { external: { email: true, google: true } };
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#f-connexion");
+  await Promise.all([pg.waitForURL(BASE + "confidentialite.html"), pg.click("a[href='confidentialite.html']")]);
+  assert.match(await pg.textContent("h1"), /Politique de confidentialité/);
+  assert.equal(await pg.locator("#suppression").count(), 1, "ancre #suppression pour Facebook");
+  assert.match(await pg.textContent("body"), /Anthropic/);
+  const html = readFileSync(join(web, "app/confidentialite.html"), "utf8");
+  assert.doesNotMatch(html, /<script/i, "page statique, sans script");
+});
