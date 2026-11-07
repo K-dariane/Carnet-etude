@@ -44,7 +44,7 @@
   let profil = null;
   let modeRecup = false;            // arrivé par un lien « mot de passe oublié » : choisir un nouveau mot de passe d'abord
   const NIVEAUX = { primaire: "Primaire", secondaire: "Secondaire", universitaire: "Universitaire" };
-  const FOURNISSEURS = { google: "Google", apple: "Apple", facebook: "Facebook" };
+  const FOURNISSEURS = { google: "Google", facebook: "Facebook" };   // Apple retiré (décision du 2026-11-07)
   const adresseApp = location.origin + location.pathname;
 
   // Lien reçu par e-mail au format …/?token_hash=…&type=… : c'est l'app qui valide (les aperçus automatiques
@@ -99,7 +99,7 @@
   });
   const jeton = async () => { const { data } = await sb.auth.getSession(); if (data && data.session) session = data.session; return session && session.access_token; };
 
-  // Modes de connexion activés dans Supabase : les boutons Facebook et Apple n'apparaissent qu'une fois activés.
+  // Modes de connexion activés dans Supabase : le bouton Facebook n'apparaît qu'une fois activé.
   const fournisseurs = fetch(CFG.supabaseUrl.replace(/\/$/, "") + "/auth/v1/settings", { headers: { apikey: CFG.supabaseAnonKey } })
     .then(r => r.ok ? r.json() : null).then(d => (d && d.external) || { google: true }).catch(() => ({ google: true }));
 

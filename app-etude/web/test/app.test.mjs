@@ -69,7 +69,7 @@ test("création de compte : formulaire vérifié, e-mail d'activation, code, pro
   await pg.waitForSelector("#f-connexion");
   assert.match(await pg.textContent("#app"), /Pas besoin de compte Claude/);
   await pg.waitForSelector("#login-google");
-  assert.equal(await pg.locator("#login-facebook, #login-apple").count(), 0, "Facebook et Apple cachés tant qu'ils ne sont pas activés");
+  assert.equal(await pg.locator("#login-facebook, #login-apple").count(), 0, "Facebook caché tant qu'il n'est pas activé ; pas d'Apple");
   assert.equal(await pg.isVisible("#login-err"), false);
   await pg.click("[data-vue-aller=inscription]"); await pg.waitForSelector("#f-inscription");
   const err = () => pg.textContent("#login-err");

@@ -11,7 +11,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
 | Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
-| Comptes : e-mail et mot de passe, confirmation de l'adresse, mot de passe oublié, code de secours, Google (Facebook et Apple prêts côté app), profil avec niveau d'étude, « Mon compte » | Fait, testé (faux Supabase) ; réglages Supabase : voir `GUIDE-CONNEXION.md` |
+| Comptes : e-mail et mot de passe, confirmation de l'adresse, mot de passe oublié, code de secours, Google (Facebook prêt côté app ; pas d'Apple), profil avec niveau d'étude, « Mon compte » | Fait, testé (faux Supabase) ; réglages Supabase : voir `GUIDE-CONNEXION.md` |
 | Branchement de l'app | Fait, testé (faux Supabase) |
 | Mise en ligne (GitHub Pages) | Préparée ; à activer (voir « Mise en ligne ») |
 
@@ -23,7 +23,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | `app/backend.js` | Fournit à l'app les mêmes services que l'artifact (`db`, `user`, `sample`, `assets`), branchés sur Supabase. Les chemins de la V1 (`data/users/<uid>/carnet/projets/…`) sont traduits vers les tables. |
 | `app/config.js` | Adresse du projet et clé publique (`anon`). |
 
-**Connexion** : e-mail et mot de passe (création de compte avec prénom, niveau d'étude et, pour les mineurs, accord d'un parent), « Mot de passe oublié ? », connexion par code reçu par e-mail, Google. Les boutons Facebook et Apple apparaissent dès qu'ils sont activés dans Supabase. La session reste ouverte sur l'appareil. Réglages et guides pas à pas : **`GUIDE-CONNEXION.md`**.
+**Connexion** : e-mail et mot de passe (création de compte avec prénom, niveau d'étude et, pour les mineurs, accord d'un parent), « Mot de passe oublié ? », connexion par code reçu par e-mail, Google. Le bouton Facebook apparaît dès qu'il est activé dans Supabase. Apple n'est pas proposé. La session reste ouverte sur l'appareil. Réglages et guides pas à pas : **`GUIDE-CONNEXION.md`**.
 
 **Niveau d'étude** : table `profils` (migration `20261107000004_profils.sql`). L'app ajoute aux consignes de Claude une ligne adaptée au niveau (primaire, secondaire, universitaire), pour les séances et le plan. Le niveau se change dans « Mon compte » (icône en haut de l'accueil).
 

@@ -1,8 +1,10 @@
 # Guide : connexion des utilisateurs
 
+Modes de connexion : e-mail et mot de passe, code reçu par e-mail, Google, Facebook. Apple n'est pas proposé (décision du 2026-11-07).
+
 Projet Supabase : `xyrlifukufcntwinrtvz`. App : https://k-dariane.github.io/Carnet-etude/
 
-Adresse de retour à donner à Google, Facebook et Apple (toujours la même) :
+Adresse de retour à donner à Google et Facebook (toujours la même) :
 
 ```
 https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback
@@ -78,39 +80,17 @@ Supabase et Google acceptent bien la demande : la page « Choisir un compte » s
 
 Le bouton « Continuer avec Facebook » apparaît tout seul dans l'app dès que Facebook est activé dans Supabase.
 
-## 3. Apple / iCloud (99 $ par an, environ 1 h, plus 1 à 2 jours de validation)
-
-« Se connecter avec Apple » demande l'**Apple Developer Program** : https://developer.apple.com/programs/ (99 $ par an).
-
-1. https://developer.apple.com/account → **Certificates, Identifiers & Profiles** → **Identifiers** → **+** :
-   1. **App IDs** → **App** → description `Carnet d'étude`, Bundle ID `cd.carnetetude.app` (exemple) → coche **Sign in with Apple** → **Register**.
-   2. **+** à nouveau → **Services IDs** → description `Carnet d'étude web`, identifiant `cd.carnetetude.web` (c'est le « Client ID ») → **Register**.
-   3. Ouvre ce Services ID → coche **Sign in with Apple** → **Configure** :
-      - Primary App ID : celui créé à l'étape 1 ;
-      - **Domains** : `xyrlifukufcntwinrtvz.supabase.co` ;
-      - **Return URLs** : `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
-      - Enregistre.
-2. **Keys** → **+** → nom `Carnet Supabase` → coche **Sign in with Apple** → **Configure** (choisis l'App ID) → **Register** → **Download**.
-   Tu obtiens un fichier `.p8`, téléchargeable **une seule fois** : garde-le précieusement. Note le **Key ID**, et ton **Team ID** (en haut à droite du site Apple).
-3. Supabase → **Authentication** → **Sign In / Providers** → **Apple** : active-le.
-   - **Client IDs** : `cd.carnetetude.web`.
-   - **Secret Key** : à fabriquer à partir du fichier `.p8`, du Key ID, du Team ID et du Client ID, avec l'outil de la documentation Supabase (« Sign in with Apple », section « Configuration »).
-   - **Save**.
-4. **À noter dans ton agenda** : ce secret expire au bout de **6 mois** au plus. Il faut le refabriquer et le recoller avant l'échéance, sinon « Continuer avec Apple » cesse de marcher.
-
-Apple ne donne le nom de la personne qu'à sa première connexion, et peut masquer son adresse e-mail (adresse « relais » @privaterelay.appleid.com). L'app demande donc le prénom et le niveau à la première connexion, comme pour Google.
-
-## 4. Mot de passe oublié et récupération du compte
+## 3. Mot de passe oublié et récupération du compte
 
 | Situation | Solution dans l'app |
 | --- | --- |
 | Mot de passe oublié | « Mot de passe oublié ? » : e-mail avec un lien et un code, puis nouveau mot de passe |
 | Pas envie de mot de passe | « Me connecter avec un code reçu par e-mail » |
-| Compte créé avec Google, Facebook ou Apple | Même adresse e-mail : Supabase relie les comptes. « Mon compte » permet aussi d'ajouter un mot de passe. |
+| Compte créé avec Google ou Facebook | Même adresse e-mail : Supabase relie les comptes. « Mon compte » permet aussi d'ajouter un mot de passe. |
 | Plus d'accès à son adresse e-mail | Toi, dans Supabase → **Authentication** → **Users** → la personne → changer son adresse, ou **Send password recovery** |
 | Plus tard : par SMS | Code par SMS au numéro de téléphone (service Twilio, payant, environ 0,05 à 0,15 $ par SMS vers la RDC, à vérifier) |
 
-## 5. Mineurs (niveaux primaire et secondaire)
+## 4. Mineurs (niveaux primaire et secondaire)
 
 - **À la création du compte** : l'app demande « As-tu 18 ans ou plus ? ». Si la réponse est non, il faut cocher « Un parent ou un tuteur est d'accord ». La base refuse un mineur sans cet accord.
 - **À préciser avant l'ouverture au public** :

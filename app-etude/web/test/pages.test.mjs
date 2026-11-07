@@ -111,12 +111,12 @@ test("lien « mot de passe oublié » (token_hash, type=recovery) : écran du no
   assert.deepEqual(await pg.evaluate(() => window.__fake.verifications.at(-1)), { token_hash: "hash-valide-recup", type: "recovery" });
 });
 
-test("Facebook et Apple : boutons affichés dès qu'ils sont activés dans Supabase", async () => {
+test("Facebook : bouton affiché dès qu'il est activé dans Supabase ; jamais de bouton Apple", async () => {
   reglages = { external: { email: true, google: true, facebook: true, apple: true } };
   await pg.evaluate(() => localStorage.clear());
   await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#login-facebook");
-  assert.deepEqual(await pg.$$eval("[data-fournisseur]", b => b.map(x => x.textContent)), ["Continuer avec Google", "Continuer avec Apple", "Continuer avec Facebook"]);
-  await pg.click("#login-apple"); await pg.waitForFunction(() => window.__fake.oauth.some(o => o.provider === "apple"));
+  assert.deepEqual(await pg.$$eval("[data-fournisseur]", b => b.map(x => x.textContent)), ["Continuer avec Google", "Continuer avec Facebook"], "Apple n'est pas proposé, même activé dans Supabase");
+  await pg.click("#login-facebook"); await pg.waitForFunction(() => window.__fake.oauth.some(o => o.provider === "facebook"));
   assert.equal((await pg.evaluate(() => window.__fake.oauth.at(-1))).redirectTo, BASE);
   reglages = { external: { email: true, google: false, facebook: false, apple: false } };
   await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#f-connexion"); await pg.waitForTimeout(300);
