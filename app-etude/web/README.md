@@ -11,7 +11,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
 | Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
-| Connexion (lien e-mail, code, Google) | Fait, testé (faux Supabase) |
+| Comptes : e-mail et mot de passe, confirmation de l'adresse, mot de passe oublié, code de secours, Google (Facebook prêt côté app ; pas d'Apple), profil avec niveau d'étude, « Mon compte » | Fait, testé (faux Supabase) ; réglages Supabase : voir `GUIDE-CONNEXION.md` |
 | Branchement de l'app | Fait, testé (faux Supabase) |
 | Mise en ligne (GitHub Pages) | Préparée ; à activer (voir « Mise en ligne ») |
 
@@ -23,7 +23,9 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | `app/backend.js` | Fournit à l'app les mêmes services que l'artifact (`db`, `user`, `sample`, `assets`), branchés sur Supabase. Les chemins de la V1 (`data/users/<uid>/carnet/projets/…`) sont traduits vers les tables. |
 | `app/config.js` | Adresse du projet et clé publique (`anon`). |
 
-**Connexion** : au choix, lien reçu par e-mail, code à 6 chiffres reçu dans le même e-mail (utile si le lien s'ouvre dans un autre navigateur), ou Google. La session reste ouverte sur l'appareil.
+**Connexion** : e-mail et mot de passe (création de compte avec prénom, niveau d'étude et, pour les mineurs, accord d'un parent), « Mot de passe oublié ? », connexion par code reçu par e-mail, Google. Le bouton Facebook apparaît dès qu'il est activé dans Supabase. Apple n'est pas proposé. La session reste ouverte sur l'appareil. Réglages et guides pas à pas : **`GUIDE-CONNEXION.md`**.
+
+**Niveau d'étude** : table `profils` (migration `20261107000004_profils.sql`). L'app ajoute aux consignes de Claude une ligne adaptée au niveau (primaire, secondaire, universitaire), pour les séances et le plan. Le niveau se change dans « Mon compte » (icône en haut de l'accueil).
 
 **Fichiers** : la base garde la référence `storage:supports/<chemin>`. L'app la remplace par un lien temporaire de 24 h pour l'affichage, et refait le lien quand tu reviens sur la page.
 
@@ -35,7 +37,9 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
    - **Site URL** : l'adresse où l'app est en ligne (par exemple `https://carnet.example.com/`).
    - **Redirect URLs** : ajoute cette même adresse.
 2. **Authentication → Providers → Email** : activé.
-3. **Authentication → Email Templates → Magic Link** : ajoute le code dans le message, par exemple `Ton code : {{ .Token }}`, en plus du lien `{{ .ConfirmationURL }}`.
+3. **Authentication → Email Templates → Magic Link** et **Confirm signup** : le lien pointe vers l'app avec `{{ .TokenHash }}` (et non `{{ .ConfirmationURL }}`), plus le code :
+   `<a href="{{ .SiteURL }}?token_hash={{ .TokenHash }}&type=email">Me connecter</a>` et `{{ .Token }}`.
+   C'est l'app qui valide le lien. Les aperçus automatiques des messageries et de WhatsApp, qui ouvrent les liens sans lancer l'app, ne peuvent donc plus le « griller ». Il faut un service d'envoi d'e-mails à toi (SMTP, par exemple Gmail) pour modifier ces modèles.
 4. **Authentication → Providers → Google** : identifiant client et secret de Google Cloud. Dans Google Cloud, l'URI de redirection autorisée est `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
 5. **`app/config.js`** : contient la clé publique (`sb_publishable_…`). Elle est faite pour être visible.
 
@@ -117,7 +121,7 @@ C'est l'app qui écrit les consignes envoyées à Claude (`RULES`, modes). Un te
 
 Dans le tableau de bord Supabase :
 
-1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`).
+1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`, `…04_profils`).
 2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et la clé serveur (`SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SECRET_KEYS`) sont fournis automatiquement.
 3. Déployer la fonction. **Automatiquement (recommandé)** : `.github/workflows/fonction.yml` lance les tests du serveur (`npm run test:serveur`) puis déploie la fonction à chaque modification de `app-etude/web/supabase/` sur `main`. Il faut une seule fois le secret GitHub `SUPABASE_ACCESS_TOKEN` (jeton créé dans Supabase → Account → Access Tokens, ajouté dans GitHub → Settings → Secrets and variables → Actions). Tu peux aussi le lancer à la main : onglet Actions → « Déploiement de la fonction chat » → Run workflow.
 

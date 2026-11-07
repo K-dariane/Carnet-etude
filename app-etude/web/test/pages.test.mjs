@@ -11,6 +11,7 @@ const { chromium } = createRequire(import.meta.url)("playwright");
 const here = dirname(fileURLToPath(import.meta.url)); const web = join(here, "..");
 const BASE = "https://k-dariane.github.io/Carnet-etude/";
 let browser, pg; const demandes = [];
+let reglages = { external: { email: true, google: true, facebook: false, apple: false } };
 
 before(async () => {
   browser = await chromium.launch();
@@ -19,6 +20,7 @@ before(async () => {
   await c.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
   await c.route(/cdn\.jsdelivr\.net\/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/, r => { const m = r.request().url().match(/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/); r.fulfill({ path: join(web, "node_modules", m[1], m[2]) }); });
   await c.route(/supabase-js@2\.118\.0\/dist\/umd\/supabase\.js/, r => r.fulfill({ body: "", contentType: "text/javascript" }));
+  await c.route(/\/auth\/v1\/settings$/, r => r.fulfill({ contentType: "application/json", body: JSON.stringify(reglages) }));
   await c.route("https://k-dariane.github.io/**", r => {
     const p = new URL(r.request().url()).pathname; demandes.push(p);
     if (!p.startsWith("/Carnet-etude/")) return r.fulfill({ status: 404, body: "hors du site" });
@@ -30,15 +32,17 @@ before(async () => {
 after(() => browser.close());
 
 test("l'app s'ouvre à son adresse en ligne, tous les fichiers sont trouvés", async () => {
-  await pg.goto(BASE); await pg.waitForSelector("#login");
+  await pg.goto(BASE); await pg.waitForSelector("#f-connexion");
   assert.ok(demandes.every(p => p.startsWith("/Carnet-etude/")), "aucun fichier demandé hors du sous-dossier : " + demandes.join(", "));
   for (const f of ["config.js", "backend.js"]) assert.ok(demandes.includes("/Carnet-etude/" + f), f + " chargé");
 });
 
 test("le lien de connexion ramène à l'adresse de l'app", async () => {
-  await pg.fill("#login-email", "moi@test.cd"); await pg.click("#login-send"); await pg.waitForSelector("#login-code:not([hidden])");
+  await pg.click("#lien-code"); await pg.fill("#k-email", "moi@test.cd"); await pg.click("#k-send"); await pg.waitForSelector("#f-k-code:not([hidden])");
   assert.equal((await pg.evaluate(() => window.__fake.emails[0])).redirect, BASE);
-  await pg.click("#login-back"); await pg.click("#login-google");
+  await pg.click("[data-vue-aller=connexion]"); await pg.click("#lien-oubli"); await pg.fill("#o-email", "moi@test.cd"); await pg.click("#o-send"); await pg.waitForSelector("#f-o-code:not([hidden])");
+  assert.equal((await pg.evaluate(() => window.__fake.emails[1])).redirect, BASE);
+  await pg.click("[data-vue-aller=connexion]"); await pg.waitForSelector("#login-google"); await pg.click("#login-google");
   await pg.waitForFunction(() => window.__fake.oauth.length === 1);
   assert.equal((await pg.evaluate(() => window.__fake.oauth[0])).redirectTo, BASE);
 });
@@ -56,4 +60,65 @@ test("manifeste d'installation valide", () => {
   const m = JSON.parse(readFileSync(join(web, "app/manifest.webmanifest"), "utf8"));
   assert.equal(m.lang, "fr"); assert.equal(m.start_url, "./"); assert.equal(m.display, "standalone");
   assert.equal(m.icons[0].src, "icone.svg");
+});
+
+test("lien d'e-mail au format token_hash : l'app valide la connexion et nettoie l'adresse", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto(BASE + "?token_hash=hash-valide&type=email");
+  await pg.waitForSelector("#f-profil", { timeout: 10000 });
+  assert.equal(pg.url(), BASE, "token_hash retiré de l'adresse");
+  assert.deepEqual(await pg.evaluate(() => window.__fake.verifications), [{ token_hash: "hash-valide", type: "email" }]);
+});
+
+test("lien d'e-mail périmé ou déjà utilisé : message rassurant, on peut redemander un lien", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto(BASE + "?token_hash=perime&type=email");
+  await pg.waitForSelector("#f-connexion");
+  assert.match(await pg.textContent("#login-err"), /n'est plus valable.*redemande un e-mail/);
+  assert.equal(pg.url(), BASE);
+  assert.equal(await pg.isVisible("#f-connexion"), true);
+});
+
+test("adresse partagée avec une erreur (#error=…) : même message, adresse nettoyée", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto("about:blank");   // sinon un simple changement de « # » ne recharge pas la page
+  await pg.goto(BASE + "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid");
+  await pg.waitForSelector("#f-connexion");
+  assert.match(await pg.textContent("#login-err"), /n'est plus valable/);
+  assert.equal(pg.url(), BASE);
+});
+
+test("échec de la connexion Google : la vraie raison est affichée, pas « lien expiré »", async () => {
+  await pg.goto("about:blank");
+  await pg.goto(BASE + "#error=server_error&error_code=unexpected_failure&error_description=Unable+to+exchange+external+code%3A+4%2F0Ab");
+  await pg.waitForSelector("#f-connexion");
+  const t = await pg.textContent("#login-err");
+  assert.match(t, /La connexion n'a pas abouti/); assert.match(t, /Unable to exchange external code/);
+  assert.doesNotMatch(t, /expiré/);
+  assert.equal(pg.url(), BASE);
+  await pg.goto("about:blank");
+  await pg.goto(BASE + "?error=access_denied&error_description=");
+  await pg.waitForSelector("#f-connexion");
+  assert.match(await pg.textContent("#login-err"), /Connexion annulée/);
+  assert.equal(pg.url(), BASE);
+});
+
+test("lien « mot de passe oublié » (token_hash, type=recovery) : écran du nouveau mot de passe", async () => {
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto(BASE + "?token_hash=hash-valide-recup&type=recovery");
+  await pg.waitForSelector("#f-nouveau", { timeout: 10000 });
+  assert.equal(pg.url(), BASE);
+  assert.deepEqual(await pg.evaluate(() => window.__fake.verifications.at(-1)), { token_hash: "hash-valide-recup", type: "recovery" });
+});
+
+test("Facebook : bouton affiché dès qu'il est activé dans Supabase ; jamais de bouton Apple", async () => {
+  reglages = { external: { email: true, google: true, facebook: true, apple: true } };
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#login-facebook");
+  assert.deepEqual(await pg.$$eval("[data-fournisseur]", b => b.map(x => x.textContent)), ["Continuer avec Google", "Continuer avec Facebook"], "Apple n'est pas proposé, même activé dans Supabase");
+  await pg.click("#login-facebook"); await pg.waitForFunction(() => window.__fake.oauth.some(o => o.provider === "facebook"));
+  assert.equal((await pg.evaluate(() => window.__fake.oauth.at(-1))).redirectTo, BASE);
+  reglages = { external: { email: true, google: false, facebook: false, apple: false } };
+  await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#f-connexion"); await pg.waitForTimeout(300);
+  assert.equal(await pg.locator("[data-fournisseur]").count(), 0, "aucun bouton si aucun fournisseur");
 });

@@ -210,6 +210,26 @@ test("liste des fichiers : seuls les noms <assetId>.<ext> comptent", () => {
   assert.deepEqual([...m.entries()].sort(), [["d65927aa4753977e63d6b78677d0a79c", "d65927aa4753977e63d6b78677d0a79c.jpg"], ["ffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffff.pdf"]]);
 });
 
+/* ---------- Profils ---------- */
+test("profil : chacun crée et modifie le sien, ne voit pas celui des autres", () => {
+  q(`insert into profils (prenom, niveau, majeur) values ('Ana', 'universitaire', true)`, { as: A });
+  q(`insert into profils (prenom, niveau, majeur, accord_parental) values ('Bob', 'primaire', false, true)`, { as: B });
+  assert.equal(q("select owner || ' ' || niveau from profils", { as: A }), `${A} universitaire`);
+  assert.equal(q("select count(*) from profils", { as: B }), "1");
+  q("update profils set niveau = 'secondaire'", { as: A });
+  assert.equal(q(`select niveau from profils where owner = '${A}'`), "secondaire");
+  q(`update profils set niveau = 'universitaire' where owner = '${B}'`, { as: A });
+  assert.equal(q(`select niveau from profils where owner = '${B}'`), "primaire", "A ne peut pas modifier le profil de B");
+  fails(`insert into profils (owner, niveau, majeur) values ('${B}', 'primaire', true)`, { as: A }, /row-level security|duplicate/);
+  fails("delete from profils", { as: A }, /permission denied/);
+  fails("select * from profils", { as: "anon" }, /permission denied/);
+});
+
+test("profil : niveau inconnu refusé ; mineur sans accord parental refusé", () => {
+  fails(`update profils set niveau = 'maternelle' where owner = '${A}'`, { as: A }, /check/);
+  fails(`update profils set majeur = false, accord_parental = false where owner = '${A}'`, { as: A }, /check/);
+});
+
 /* ---------- Consommation IA et quota ---------- */
 test("semaine du quota : du lundi 00:00 au lundi suivant, heure de Kinshasa", () => {
   const debut = t => q(`select to_char(ia_debut_semaine('${t}'::timestamptz) at time zone 'Africa/Kinshasa', 'YYYY-MM-DD HH24:MI')`);
