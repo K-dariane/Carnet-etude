@@ -165,5 +165,6 @@
     st.session = { access_token: "jeton-" + email, user: { id: c.id, email, user_metadata: c.metadata, app_metadata: { providers: c.providers } } }; sauver();
   };
 
-  window.supabase = { createClient: (url, key, o) => { st.client = { url, key, flowType: o && o.auth && o.auth.flowType }; return { auth, from: t => new Requete(t), storage: { from: stockage } }; } };
+  window.supabase = { createClient: (url, key, o) => { st.client = { url, key, flowType: o && o.auth && o.auth.flowType }; return { auth, from: t => new Requete(t), storage: { from: stockage },
+    rpc: async nom => nom === "ia_mon_quota" && uid() ? { data: [{ utilise: st.creditUtilise ?? 50000, limite: 200000, reinitialisation: "demain" }], error: null } : { data: null, error: { message: "fonction inconnue" } } }; } };
 })();

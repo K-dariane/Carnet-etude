@@ -240,37 +240,53 @@ test("semaine du quota : du lundi 00:00 au lundi suivant, heure de Kinshasa", ()
   assert.equal(debut("2026-11-02 00:00+01"), "2026-11-02 00:00");
 });
 
-test("quota : seuls les tokens de la semaine en cours comptent, 500 000 par défaut", () => {
-  q(`insert into ia_appels (owner, tache, modele, statut, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, created_at) values
-     ('${A}', 'seance', 'claude-haiku-5-5', 'ok', 1000, 200, 300, 500, now()),
-     ('${A}', 'plan', 'claude-sonnet-5-5', 'tronque', 10, 0, 0, 90, now()),
-     ('${A}', 'seance', 'claude-haiku-5-5', 'ok', 99999, 0, 0, 1, ia_debut_semaine() - interval '1 second'),
-     ('${B}', 'seance', 'claude-haiku-5-5', 'ok', 7, 0, 0, 0, now());`, { as: "service" });
-  assert.equal(q(`select total_tokens from ia_appels where owner = '${A}' and tache = 'plan'`), "100");
-  const [utilise, limite, reinit] = q(`select utilise, limite, (reinitialisation = ia_debut_semaine() + interval '7 days') from ia_quota('${A}')`, { as: "service" }).split("|");
-  assert.equal(utilise, "2100"); assert.equal(limite, "500000"); assert.equal(reinit, "t");
-  assert.equal(q(`select utilise || '/' || limite from ia_quota('dddddddd-0000-4000-8000-000000000000')`, { as: "service" }), "0/500000", "nouveau testeur : rien consommé");
+test("jour du crédit : de minuit à minuit, heure de Kinshasa", () => {
+  const debut = t => q(`select to_char(ia_debut_jour('${t}'::timestamptz) at time zone 'Africa/Kinshasa', 'YYYY-MM-DD HH24:MI')`);
+  assert.equal(debut("2026-11-04 15:00+01"), "2026-11-04 00:00");
+  assert.equal(debut("2026-11-04 23:59+01"), "2026-11-04 00:00");
+  assert.equal(debut("2026-11-04 23:30+00"), "2026-11-05 00:00", "23:30 UTC = 00:30 le lendemain à Kinshasa");
 });
 
-test("quota : réglage général et exception par testeur", () => {
-  q("update ia_config set quota_semaine = 300000");
+test("coût d'un appel (micro-dollars) : Haiku, Haiku long, Sonnet, autre modèle", () => {
+  const c = (m, i, cw, cr, o) => q(`select ia_cout('${m}', ${i}, ${cw}, ${cr}, ${o})`);
+  assert.equal(c("claude-haiku-5-5", 1200, 800, 0, 50), "245");           // 1200×0,10 + 50×0,50 + 800×0,125
+  assert.equal(c("claude-haiku-5-5", 1500, 2000, 30000, 1300), "1350");
+  assert.equal(c("claude-haiku-5-5", 60000, 0, 50000, 1000), "35000", "au-delà de 100 000 tokens d'entrée : tarif ×5");
+  assert.equal(c("claude-sonnet-5-5", 1500, 2000, 30000, 1300), "27000");
+  assert.equal(c("claude-opus-4-8", 1000, 0, 0, 100), "7500", "autre modèle : tarif prudent");
+});
+
+test("crédit : seuls les appels du jour comptent, 0,35 $ par défaut", () => {
+  q(`insert into ia_appels (owner, tache, modele, statut, input_tokens, output_tokens, cout_microdollars, created_at) values
+     ('${A}', 'seance', 'claude-haiku-5-5', 'ok', 1000, 500, 1350, now()),
+     ('${A}', 'plan', 'claude-sonnet-5-5', 'tronque', 10, 90, 27000, now()),
+     ('${A}', 'seance', 'claude-haiku-5-5', 'ok', 99999, 1, 99999, ia_debut_jour() - interval '1 second'),
+     ('${B}', 'seance', 'claude-haiku-5-5', 'ok', 7, 0, 7, now());`, { as: "service" });
+  assert.equal(q(`select total_tokens from ia_appels where owner = '${A}' and tache = 'plan'`), "100");
+  const [utilise, limite, reinit] = q(`select utilise, limite, (reinitialisation = ia_debut_jour() + interval '1 day') from ia_quota('${A}')`, { as: "service" }).split("|");
+  assert.equal(utilise, "28350"); assert.equal(limite, "350000"); assert.equal(reinit, "t");
+  assert.equal(q(`select utilise || '/' || limite from ia_quota('dddddddd-0000-4000-8000-000000000000')`, { as: "service" }), "0/350000", "nouvel utilisateur : rien consommé");
+});
+
+test("crédit : réglage général et exception par utilisateur", () => {
+  q("update ia_config set budget_jour_microdollars = 300000");
   assert.equal(q(`select limite from ia_quota('${A}')`, { as: "service" }), "300000");
-  q(`insert into ia_quotas (owner, quota_semaine) values ('${A}', 1000000)`);
+  q(`insert into ia_quotas (owner, budget_jour_microdollars) values ('${A}', 1000000)`);
   assert.equal(q(`select limite from ia_quota('${A}')`, { as: "service" }), "1000000");
   assert.equal(q(`select limite from ia_quota('${B}')`, { as: "service" }), "300000");
-  q(`delete from ia_quotas; update ia_config set quota_semaine = 500000`);
+  q(`delete from ia_quotas; update ia_config set budget_jour_microdollars = 350000`);
 });
 
-test("quota : un testeur voit sa consommation, pas celle des autres, et ne peut rien écrire", () => {
+test("crédit : un utilisateur voit sa consommation, pas celle des autres, et ne peut rien écrire", () => {
   assert.equal(q("select count(*) from ia_appels", { as: A }), "3");
   assert.equal(q("select count(*) from ia_appels", { as: B }), "1");
-  assert.equal(q("select utilise || '/' || limite from ia_mon_quota()", { as: A }), "2100/500000");
+  assert.equal(q("select utilise || '/' || limite from ia_mon_quota()", { as: A }), "28350/350000");
   assert.equal(q("select utilise from ia_mon_quota()", { as: B }), "7");
   fails(`insert into ia_appels (owner, tache, modele, statut) values ('${A}', 'seance', 'x', 'ok')`, { as: A }, /permission denied/);
   fails("delete from ia_appels", { as: A }, /permission denied/);
   fails(`select * from ia_quota('${B}')`, { as: A }, /permission denied/);
-  fails("update ia_config set quota_semaine = 999999999", { as: A }, /permission denied/);
-  fails(`insert into ia_quotas values ('${A}', 999999999)`, { as: A }, /permission denied/);
+  fails("update ia_config set budget_jour_microdollars = 999999999", { as: A }, /permission denied/);
+  fails(`insert into ia_quotas (owner, budget_jour_microdollars) values ('${A}', 999999999)`, { as: A }, /permission denied/);
   fails("select * from ia_mon_quota()", { as: "anon" }, /permission denied/);
   fails("select count(*) from ia_appels", { as: "anon" }, /permission denied/);
 });
@@ -278,6 +294,7 @@ test("quota : un testeur voit sa consommation, pas celle des autres, et ne peut 
 test("quota : valeurs refusées", () => {
   fails(`insert into ia_appels (owner, tache, modele, statut) values ('${A}', 'piratage', 'x', 'ok')`, { as: "service" }, /check/);
   fails(`insert into ia_appels (owner, tache, modele, statut, output_tokens) values ('${A}', 'seance', 'x', 'ok', -5)`, { as: "service" }, /check/);
+  fails(`insert into ia_appels (owner, tache, modele, statut, cout_microdollars) values ('${A}', 'seance', 'x', 'ok', -1)`, { as: "service" }, /check/);
 });
 
 test("import d'un vrai export (si IMPORT_REEL est défini, avec FICHIERS_REEL pour les photos et PDF)", { skip: !process.env.IMPORT_REEL }, () => {

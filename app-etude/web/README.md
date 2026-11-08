@@ -9,7 +9,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | --- | --- |
 | Schéma de la base, règles d'accès, import | Fait, testé |
 | Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
-| Quota : 500 000 tokens par testeur et par semaine | Fait, testé |
+| Crédit d'étude : 0,35 $ par utilisateur et par jour (coût réel) | Fait, testé |
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
 | Comptes : e-mail et mot de passe, confirmation de l'adresse, mot de passe oublié, code de secours, Google (Facebook prêt côté app ; pas d'Apple), profil avec niveau d'étude, « Mon compte » | Fait, testé (faux Supabase) ; réglages Supabase : voir `GUIDE-CONNEXION.md` |
 | Branchement de l'app | Fait, testé (faux Supabase) |
@@ -86,7 +86,7 @@ L'app n'appelle jamais Claude directement : elle appelle la fonction `chat`, qui
 | --- | --- |
 | 1 | Vérifie que le testeur est connecté (jeton Supabase). Sinon : `session_expired`. |
 | 2 | Vérifie la demande (rôles, tailles, images). Sinon : `requete_invalide`, `prompt_too_large` ou `image_rejected`. |
-| 3 | Vérifie le quota de la semaine. S'il est épuisé : `quota_atteint`, avec la date de remise à zéro. |
+| 3 | Vérifie le crédit d'étude du jour. S'il est épuisé : `quota_atteint`, avec l'heure de la remise à zéro (minuit). |
 | 4 | Appelle Claude et renvoie le texte au fil de l'écriture. |
 | 5 | Enregistre les tokens consommés dans `ia_appels`, même si la réponse est arrêtée en cours de route. |
 
@@ -104,14 +104,24 @@ L'app n'appelle jamais Claude directement : elle appelle la fonction `chat`, qui
 **Format des échanges** : `POST /functions/v1/chat` avec `{ messages, tier, tache, images }` (ou `prompt` à la place de `messages`). Réponse en NDJSON (une ligne JSON par événement) :
 `{"type":"texte","delta":"…"}` … puis `{"type":"fin","text","tronque","modele","tokens","quota"}`, ou `{"type":"erreur","code","message"}`.
 
-### Quota (`supabase/migrations/20261102000002_ia_quota.sql`)
+### Crédit d'étude quotidien (`…02_ia_quota.sql`, puis `…05_credit_jour.sql`)
 
-- **Ce qui compte** : 500 000 tokens par testeur et par semaine, tous modèles confondus (entrée + cache écrit + cache lu + sortie).
-- **La semaine** : elle commence le lundi à 00:00, heure de Kinshasa.
-- **Changer le quota de tout le monde** : `update ia_config set quota_semaine = 800000;`
-- **Changer le quota d'un seul testeur** : `insert into ia_quotas (owner, quota_semaine) values ('<uuid>', 1000000);`
-- **Voir ce qu'il reste** : un testeur connecté lit son quota avec `ia_mon_quota()`. Il ne voit que sa propre consommation et ne peut rien écrire.
-- **Dépassement possible** : le quota est vérifié avant chaque demande. La dernière réponse de la semaine peut donc faire passer un peu au-dessus de la limite (au plus 16 000 tokens de réponse, plus l'entrée de cette demande). Pareil si plusieurs demandes partent en même temps.
+- **Ce qui compte** : chaque appel au tuteur a un **coût réel**, en micro-dollars (1 $ = 1 000 000). Il est calculé à partir des tokens et des prix du modèle (`TARIFS` dans `_shared/chat.ts`, `ia_cout()` en SQL) :
+
+  | Modèle | Entrée | Sortie | Cache lu | Cache écrit |
+  | --- | --- | --- | --- | --- |
+  | Haiku 5.5 | 0,10 $ | 0,50 $ | 0,01 $ | 0,125 $ |
+  | Haiku 5.5, au-delà de 100 000 tokens d'entrée | 0,50 $ | 2,50 $ | 0,05 $ | 0,625 $ |
+  | Sonnet 5.5 (mode approfondi) | 2,00 $ | 10,00 $ | 0,20 $ | 2,50 $ |
+  | Autre modèle (repli en cas de refus) | 5,00 $ | 25,00 $ | 0,50 $ | 6,25 $ |
+
+  Prix par million de tokens.
+- **Budget** : **0,35 $ par utilisateur et par jour**, remis à zéro chaque nuit à minuit, heure de Kinshasa. Estimation : environ 210 à 300 messages avec Haiku seul, environ 89 messages (environ 2h40 d'étude intense) avec 10 % de messages en mode approfondi, ou 10 à 15 messages en mode approfondi seul, selon la taille des supports.
+- **Changer le budget de tout le monde** : `update ia_config set budget_jour_microdollars = 300000;` (0,30 $).
+- **Changer le budget d'un seul utilisateur** : `insert into ia_quotas (owner, budget_jour_microdollars) values ('<uuid>', 1000000);`
+- **Voir ce qu'il reste** : l'utilisateur voit son crédit restant dans « Mon compte » (`ia_mon_quota()`). Un message le prévient aussi quand il reste 20 %.
+- **Dépassement possible** : le crédit est vérifié avant chaque demande. La dernière réponse du jour peut donc le dépasser un peu.
+- **Si les prix d'Anthropic changent** : modifier `TARIFS` dans `_shared/chat.ts` **et** `ia_cout()` en SQL.
 
 ### Limite connue
 
@@ -121,7 +131,7 @@ C'est l'app qui écrit les consignes envoyées à Claude (`RULES`, modes). Un te
 
 Dans le tableau de bord Supabase :
 
-1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`, `…04_profils`).
+1. **SQL Editor** : exécuter les fichiers de `supabase/migrations/`, dans l'ordre (`…01_carnet`, `…02_ia_quota`, `…03_stockage`, `…04_profils`, `…05_credit_jour`).
 2. **Edge Functions → Secrets** : ajouter `ANTHROPIC_API_KEY` (ta clé Claude Console). Facultatif : `ALLOWED_ORIGINS` = adresse de l'app, par exemple `https://carnet.example.com`. `SUPABASE_URL` et la clé serveur (`SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SECRET_KEYS`) sont fournis automatiquement.
 3. Déployer la fonction. **Automatiquement (recommandé)** : `.github/workflows/fonction.yml` lance les tests du serveur (`npm run test:serveur`) puis déploie la fonction à chaque modification de `app-etude/web/supabase/` sur `main`. Il faut une seule fois le secret GitHub `SUPABASE_ACCESS_TOKEN` (jeton créé dans Supabase → Account → Access Tokens, ajouté dans GitHub → Settings → Secrets and variables → Actions). Tu peux aussi le lancer à la main : onglet Actions → « Déploiement de la fonction chat » → Run workflow.
 

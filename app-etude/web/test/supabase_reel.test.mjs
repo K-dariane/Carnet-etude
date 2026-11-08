@@ -68,3 +68,9 @@ test("lien d'e-mail token_hash : l'app le valide par /auth/v1/verify", async () 
   assert.equal(new URL(r.url).pathname, "/auth/v1/verify"); assert.equal(r.method, "POST");
   assert.deepEqual(JSON.parse(r.body).token_hash, "abc123"); assert.equal(JSON.parse(r.body).type, "email");
 });
+
+test("crédit du jour : « Mon compte » appelle la fonction ia_mon_quota", async () => {
+  await sb.rpc("ia_mon_quota");
+  const r = derniere();
+  assert.equal(new URL(r.url).pathname, "/rest/v1/rpc/ia_mon_quota"); assert.equal(r.method, "POST");
+});

@@ -58,7 +58,7 @@ after(() => server.close());
 
 /* ---------- Dépendances simulées ---------- */
 let appels, quotaUtilise, quotaLimite;
-beforeEach(() => { requetes = []; appels = []; quotaUtilise = 1000; quotaLimite = 500000; connexionsFermees = 0; });
+beforeEach(() => { requetes = []; appels = []; quotaUtilise = 1000; quotaLimite = 200000; connexionsFermees = 0; });
 const deps = (o = {}) => ({
   anthropic: new Anthropic({ apiKey: "cle-de-test", baseURL: base, maxRetries: 0 }),
   sdk: Anthropic,
@@ -84,7 +84,7 @@ test("séance normale : Haiku, effort medium, cache, réponse relayée morceau p
   const fin = l.at(-1);
   assert.equal(fin.type, "fin"); assert.equal(fin.text, "### Intégration par parties\n\\( u v' \\)"); assert.equal(fin.tronque, false);
   assert.equal(fin.modele, "claude-haiku-5-5"); assert.equal(fin.tokens, 1200 + 800 + 50);
-  assert.equal(fin.quota.utilise, 1000 + 2050); assert.equal(fin.quota.limite, 500000);
+  assert.equal(fin.quota.utilise, 1000 + 245, "crédit en micro-dollars : 1200×0,10 + 50×0,50 + 800×0,125"); assert.equal(fin.quota.limite, 200000);
   const r = requetes[0].body;
   assert.equal(r.model, "claude-haiku-5-5"); assert.equal(r.max_tokens, 16000); assert.equal(r.stream, true);
   assert.deepEqual(r.output_config, { effort: "medium" }); assert.deepEqual(r.cache_control, { type: "ephemeral" });
@@ -92,7 +92,14 @@ test("séance normale : Haiku, effort medium, cache, réponse relayée morceau p
   assert.equal(requetes[0].headers["anthropic-beta"], undefined);
   assert.equal(requetes[0].headers["x-api-key"], "cle-de-test");
   assert.deepEqual(r.messages.map(m => m.role), ["user", "assistant", "user"]);
-  assert.deepEqual(appels, [{ owner: "u-1", tache: "seance", modele: "claude-haiku-5-5", statut: "ok", input_tokens: 1200, cache_creation_tokens: 800, cache_read_tokens: 0, output_tokens: 50 }]);
+  assert.deepEqual(appels, [{ owner: "u-1", tache: "seance", modele: "claude-haiku-5-5", statut: "ok", input_tokens: 1200, cache_creation_tokens: 800, cache_read_tokens: 0, output_tokens: 50, cout_microdollars: 245 }]);
+});
+
+test("coût enregistré selon le modèle : Sonnet coûte environ 20 fois plus que Haiku", async () => {
+  await lignes(await handle(requete(conv("x")), deps()));
+  await lignes(await handle(requete({ ...conv("y"), tier: "complex" }), deps()));
+  assert.equal(appels[0].cout_microdollars, 245);
+  assert.equal(appels[1].cout_microdollars, 1200 * 2 + 50 * 10 + 800 * 2.5);
 });
 
 test("mode approfondi : Sonnet, effort high, repli serveur en cas de refus", async () => {
@@ -146,11 +153,11 @@ test("sans connexion ou jeton invalide : 401 session_expired, Claude pas appelé
 });
 
 test("quota atteint : 429 quota_atteint avec la date de remise à zéro, Claude pas appelé", async () => {
-  quotaUtilise = 500000;
+  quotaUtilise = 200000;
   const res = await handle(requete(conv("x")), deps());
   assert.equal(res.status, 429);
   const e = (await res.json()).erreur;
-  assert.equal(e.code, "quota_atteint"); assert.match(e.message, /quota de la semaine/);
+  assert.equal(e.code, "quota_atteint"); assert.match(e.message, /crédit d'étude d'aujourd'hui.*minuit/);
   assert.equal(e.quota.reinitialisation, "2026-11-09T00:00:00+01:00");
   assert.equal(requetes.length, 0); assert.equal(appels.length, 0);
 });

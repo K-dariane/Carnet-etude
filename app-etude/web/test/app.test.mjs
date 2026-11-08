@@ -19,7 +19,7 @@ let browser, ctx, pg, erreurs = [], appels = [], refusees = [], reponseChat = nu
 let reglages = { external: { email: true, google: true, facebook: false, apple: false } };
 const REPONSE = "### Intégration par parties\nD'après ton cours *cours*, \\[ \\int u v' = [uv] - \\int u' v \\]\n- Résultat : \\(x e^x - e^x + C\\)";
 const ndjson = (texte, extra = {}) => texte.match(/[\s\S]{1,25}/g).map(d => JSON.stringify({ type: "texte", delta: d })).join("\n") + "\n" +
-  JSON.stringify({ type: "fin", text: texte, tronque: false, modele: "claude-haiku-5-5", tokens: 1234, quota: { utilise: 1234, limite: 500000, reinitialisation: "2026-11-09T00:00:00+01:00" }, ...extra }) + "\n";
+  JSON.stringify({ type: "fin", text: texte, tronque: false, modele: "claude-haiku-5-5", tokens: 1234, quota: { utilise: 1234, limite: 200000, reinitialisation: "2026-11-09T00:00:00+01:00" }, ...extra }) + "\n";
 
 async function nouvellePage(context) {
   const p = await context.newPage();
@@ -262,10 +262,10 @@ test("mode approfondi et photo jointe : Sonnet demandé, photo dans Storage, ré
 });
 
 test("quota atteint : message clair, rien d'ajouté à la conversation", async () => {
-  reponseChat = (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ erreur: { code: "quota_atteint", message: "Tu as utilisé tout ton quota de la semaine. Il se remet à zéro lundi." } }) });
+  reponseChat = (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ erreur: { code: "quota_atteint", message: "Tu as utilisé tout ton crédit d'étude d'aujourd'hui. Il se recharge cette nuit à minuit." } }) });
   await pg.fill("#msg", "Encore une question"); await pg.click("#sendbtn");
-  await attendre(() => !document.querySelector("#toast").hidden && /quota/.test(document.querySelector("#toast").textContent));
-  assert.equal(await pg.textContent("#toast"), "Tu as utilisé tout ton quota de la semaine. Il se remet à zéro lundi.");
+  await attendre(() => !document.querySelector("#toast").hidden && /crédit/.test(document.querySelector("#toast").textContent));
+  assert.equal(await pg.textContent("#toast"), "Tu as utilisé tout ton crédit d'étude d'aujourd'hui. Il se recharge cette nuit à minuit.");
   assert.equal(await pg.locator(".msg.assistant").count(), 2);
   reponseChat = null;
 });
@@ -338,6 +338,7 @@ test("Mon compte : niveau modifié (et pris en compte par Claude), puis déconne
   await pg.click("[data-a=compte]"); await pg.waitForSelector("#compte");
   assert.equal(await pg.inputValue("#m-prenom"), "Moi");
   assert.equal(await pg.isChecked("#m-niveau-secondaire"), true);
+  await attendre(() => /il te reste environ 75 %/.test(document.querySelector("#compte-credit").textContent));
   await pg.check("#m-niveau-universitaire"); await pg.check("#m-majeur-oui"); await pg.click("#m-go");
   await attendre(() => /Profil enregistré/.test(document.querySelector("#compte-err").textContent));
   assert.equal((await fake()).tables.profils[0].niveau, "universitaire");
