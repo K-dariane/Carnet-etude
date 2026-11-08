@@ -105,7 +105,9 @@ button.card:hover { border-color: var(--accent); }
 .field .hint { color: var(--muted); font-size: .85rem; margin: 0; }
 [hidden] { display: none !important; }  /* version web : l'attribut hidden l'emporte sur display (écran de connexion) */
 /* Version web : la voix (dictée, lecture, mode oral) */
-.who .lire { border: 0; background: none; cursor: pointer; font-size: 1rem; padding: 0 4px; line-height: 1; }
+.msg-actions { display: flex; margin-top: 6px; }
+.msg-actions .lire { min-height: 34px; padding: 4px 12px; font-size: .88rem; font-weight: 700; }
+.msg-actions .lire[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 #micbtn.ecoute { background: var(--danger); color: #fff; border-color: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .65; } }
 @media (prefers-reduced-motion: reduce) { #micbtn.ecoute { animation: none; } }
@@ -860,7 +862,8 @@ function msgNode(turn) {
   } else if (turn.role === "user") {
     d.innerHTML = `<div class="bubble">${turn.img ? `<img class="thumb" src="${esc(turn.img)}" alt="Photo envoyée">` : turn.hadImg ? `<em>[photo jointe]</em>\n` : ""}${esc(turn.content)}</div>`;
   } else {
-    d.innerHTML = `<span class="who">Tuteur${voix() && voix().peutLire() ? ` <button class="lire" type="button" data-a="lire" data-ts="${esc(turn.ts)}" aria-label="Écouter la réponse" title="Écouter la réponse">🔊</button>` : ""}</span><div class="bubble md">${renderMd(turn.content)}</div>`;
+    d.innerHTML = `<span class="who">Tuteur</span><div class="bubble md">${renderMd(turn.content)}</div>` +
+      (voix() && voix().peutLire() ? `<div class="msg-actions"><button class="btn lire" type="button" data-a="lire" data-ts="${esc(turn.ts)}">🔊 Écouter</button></div>` : "");
     d.dataset.tx = "0";
   }
   msgCache.set(key, d);
@@ -1228,8 +1231,14 @@ document.addEventListener("click", async ev => {
     case "mic": dicterQuestion(false); break;
     case "lire": {
       const V = voix(); if (!V) break;
-      if (V.enLecture()) { V.arreter(); break; }
-      const t = S.thread.find(x => String(x.ts) === b.dataset.ts); if (t) V.lire(t.content);
+      const etat = (btn, actif) => { btn.setAttribute("aria-pressed", String(actif)); btn.textContent = actif ? "⏹ Arrêter" : "🔊 Écouter"; };
+      const enCours = b.getAttribute("aria-pressed") === "true";
+      document.querySelectorAll(".msg-actions .lire[aria-pressed=true]").forEach(x => etat(x, false));
+      V.arreter();
+      if (enCours) break;
+      const t = S.thread.find(x => String(x.ts) === b.dataset.ts); if (!t) break;
+      etat(b, true);
+      V.lire(t.content, { surFin: () => etat(b, false) });
       break;
     }
     case "home": if (S.view === "form" && S.editId) { S.view = "projet"; S.editId = null; render(); } else closeProject(); break;

@@ -411,8 +411,13 @@ test("voix : dictée de la question au micro, puis écoute d'une réponse", asyn
   const avant = appels.length;
   await pg.waitForTimeout(200); assert.equal(appels.length, avant, "hors mode oral, la dictée n'envoie pas toute seule");
   await pg.fill("#msg", "");
+  const nbReponses = await pg.locator(".msg.assistant").count();
+  assert.equal(await pg.locator(".msg.assistant .msg-actions .lire").count(), nbReponses, "un bouton Écouter sous chaque réponse du tuteur");
+  assert.equal(await pg.textContent(".msg.assistant .lire"), "🔊 Écouter");
   await pg.click(".msg.assistant .lire");
+  assert.equal(await pg.textContent(".msg.assistant .lire"), "⏹ Arrêter");
   await attendre(() => window.__lu.length > 0 && !window.speechSynthesis.speaking && window.__lu.join(" ").includes("plus C"));
+  await attendre(() => document.querySelector(".msg.assistant .lire").textContent === "🔊 Écouter");
   const lu = (await pg.evaluate(() => window.__lu)).join(" ");
   assert.match(lu, /intégrale/); assert.doesNotMatch(lu, /\\\[|\\int|###|\*\*/, "pas de LaTeX ni de Markdown lus tels quels");
 });
