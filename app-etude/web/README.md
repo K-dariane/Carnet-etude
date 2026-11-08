@@ -116,7 +116,7 @@ L'app n'appelle jamais Claude directement : elle appelle la fonction `chat`, qui
   | Autre modèle (repli en cas de refus) | 5,00 $ | 25,00 $ | 0,50 $ | 6,25 $ |
 
   Prix par million de tokens.
-- **Budget** : **0,20 $ par utilisateur et par jour**, remis à zéro chaque nuit à minuit, heure de Kinshasa. Ça représente environ 150 messages avec Haiku (1h30 à 2h d'étude intense), ou environ 7 à 15 messages en mode approfondi, selon la taille des supports.
+- **Budget** : **0,20 $ par utilisateur et par jour**, remis à zéro chaque nuit à minuit, heure de Kinshasa. Estimation : environ 120 à 170 messages avec Haiku seul, environ 50 messages (1h30 d'étude intense) avec 10 % de messages en mode approfondi, ou 6 à 8 messages en mode approfondi seul, selon la taille des supports.
 - **Changer le budget de tout le monde** : `update ia_config set budget_jour_microdollars = 300000;` (0,30 $).
 - **Changer le budget d'un seul utilisateur** : `insert into ia_quotas (owner, budget_jour_microdollars) values ('<uuid>', 1000000);`
 - **Voir ce qu'il reste** : l'utilisateur voit son crédit restant dans « Mon compte » (`ia_mon_quota()`). Un message le prévient aussi quand il reste 20 %.
