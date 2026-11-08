@@ -9,7 +9,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | --- | --- |
 | Schéma de la base, règles d'accès, import | Fait, testé |
 | Fonction serveur IA (Haiku / Sonnet, streaming) | Fait, testé (fausse API Claude) |
-| Crédit d'étude : 0,20 $ par utilisateur et par jour (coût réel) | Fait, testé |
+| Crédit d'étude : 0,35 $ par utilisateur et par jour (coût réel) | Fait, testé |
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
 | Comptes : e-mail et mot de passe, confirmation de l'adresse, mot de passe oublié, code de secours, Google (Facebook prêt côté app ; pas d'Apple), profil avec niveau d'étude, « Mon compte » | Fait, testé (faux Supabase) ; réglages Supabase : voir `GUIDE-CONNEXION.md` |
 | Branchement de l'app | Fait, testé (faux Supabase) |
@@ -116,7 +116,7 @@ L'app n'appelle jamais Claude directement : elle appelle la fonction `chat`, qui
   | Autre modèle (repli en cas de refus) | 5,00 $ | 25,00 $ | 0,50 $ | 6,25 $ |
 
   Prix par million de tokens.
-- **Budget** : **0,20 $ par utilisateur et par jour**, remis à zéro chaque nuit à minuit, heure de Kinshasa. Estimation : environ 120 à 170 messages avec Haiku seul, environ 50 messages (1h30 d'étude intense) avec 10 % de messages en mode approfondi, ou 6 à 8 messages en mode approfondi seul, selon la taille des supports.
+- **Budget** : **0,35 $ par utilisateur et par jour**, remis à zéro chaque nuit à minuit, heure de Kinshasa. Estimation : environ 210 à 300 messages avec Haiku seul, environ 89 messages (environ 2h40 d'étude intense) avec 10 % de messages en mode approfondi, ou 10 à 15 messages en mode approfondi seul, selon la taille des supports.
 - **Changer le budget de tout le monde** : `update ia_config set budget_jour_microdollars = 300000;` (0,30 $).
 - **Changer le budget d'un seul utilisateur** : `insert into ia_quotas (owner, budget_jour_microdollars) values ('<uuid>', 1000000);`
 - **Voir ce qu'il reste** : l'utilisateur voit son crédit restant dans « Mon compte » (`ia_mon_quota()`). Un message le prévient aussi quand il reste 20 %.

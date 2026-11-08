@@ -1,5 +1,5 @@
 -- Quota en crédit quotidien, calculé sur le coût réel de chaque appel (décision du 2026-11-08, option B).
--- Budget par défaut : 0,20 $ par utilisateur et par jour (200 000 micro-dollars), remis à zéro à minuit, heure de Kinshasa.
+-- Budget par défaut : 0,35 $ par utilisateur et par jour (350 000 micro-dollars, décision du 2026-11-08), remis à zéro à minuit, heure de Kinshasa.
 -- Une relecture depuis le cache compte peu, une réponse compte plus, le mode approfondi (Sonnet) environ 20 fois plus.
 -- L'ancien quota hebdomadaire en tokens (quota_semaine) n'est plus utilisé ; ses colonnes sont gardées (pas de suppression).
 
@@ -7,7 +7,7 @@
 alter table public.ia_appels add column cout_microdollars bigint not null default 0 check (cout_microdollars >= 0);
 
 -- Réglage général et exception par utilisateur.
-alter table public.ia_config add column budget_jour_microdollars bigint not null default 200000 check (budget_jour_microdollars >= 0);
+alter table public.ia_config add column budget_jour_microdollars bigint not null default 350000 check (budget_jour_microdollars >= 0);
 alter table public.ia_quotas alter column quota_semaine drop not null;
 alter table public.ia_quotas add column budget_jour_microdollars bigint check (budget_jour_microdollars >= 0);
 

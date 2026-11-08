@@ -256,7 +256,7 @@ test("coût d'un appel (micro-dollars) : Haiku, Haiku long, Sonnet, autre modèl
   assert.equal(c("claude-opus-4-8", 1000, 0, 0, 100), "7500", "autre modèle : tarif prudent");
 });
 
-test("crédit : seuls les appels du jour comptent, 0,20 $ par défaut", () => {
+test("crédit : seuls les appels du jour comptent, 0,35 $ par défaut", () => {
   q(`insert into ia_appels (owner, tache, modele, statut, input_tokens, output_tokens, cout_microdollars, created_at) values
      ('${A}', 'seance', 'claude-haiku-5-5', 'ok', 1000, 500, 1350, now()),
      ('${A}', 'plan', 'claude-sonnet-5-5', 'tronque', 10, 90, 27000, now()),
@@ -264,8 +264,8 @@ test("crédit : seuls les appels du jour comptent, 0,20 $ par défaut", () => {
      ('${B}', 'seance', 'claude-haiku-5-5', 'ok', 7, 0, 7, now());`, { as: "service" });
   assert.equal(q(`select total_tokens from ia_appels where owner = '${A}' and tache = 'plan'`), "100");
   const [utilise, limite, reinit] = q(`select utilise, limite, (reinitialisation = ia_debut_jour() + interval '1 day') from ia_quota('${A}')`, { as: "service" }).split("|");
-  assert.equal(utilise, "28350"); assert.equal(limite, "200000"); assert.equal(reinit, "t");
-  assert.equal(q(`select utilise || '/' || limite from ia_quota('dddddddd-0000-4000-8000-000000000000')`, { as: "service" }), "0/200000", "nouvel utilisateur : rien consommé");
+  assert.equal(utilise, "28350"); assert.equal(limite, "350000"); assert.equal(reinit, "t");
+  assert.equal(q(`select utilise || '/' || limite from ia_quota('dddddddd-0000-4000-8000-000000000000')`, { as: "service" }), "0/350000", "nouvel utilisateur : rien consommé");
 });
 
 test("crédit : réglage général et exception par utilisateur", () => {
@@ -274,13 +274,13 @@ test("crédit : réglage général et exception par utilisateur", () => {
   q(`insert into ia_quotas (owner, budget_jour_microdollars) values ('${A}', 1000000)`);
   assert.equal(q(`select limite from ia_quota('${A}')`, { as: "service" }), "1000000");
   assert.equal(q(`select limite from ia_quota('${B}')`, { as: "service" }), "300000");
-  q(`delete from ia_quotas; update ia_config set budget_jour_microdollars = 200000`);
+  q(`delete from ia_quotas; update ia_config set budget_jour_microdollars = 350000`);
 });
 
 test("crédit : un utilisateur voit sa consommation, pas celle des autres, et ne peut rien écrire", () => {
   assert.equal(q("select count(*) from ia_appels", { as: A }), "3");
   assert.equal(q("select count(*) from ia_appels", { as: B }), "1");
-  assert.equal(q("select utilise || '/' || limite from ia_mon_quota()", { as: A }), "28350/200000");
+  assert.equal(q("select utilise || '/' || limite from ia_mon_quota()", { as: A }), "28350/350000");
   assert.equal(q("select utilise from ia_mon_quota()", { as: B }), "7");
   fails(`insert into ia_appels (owner, tache, modele, statut) values ('${A}', 'seance', 'x', 'ok')`, { as: A }, /permission denied/);
   fails("delete from ia_appels", { as: A }, /permission denied/);
