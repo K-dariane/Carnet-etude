@@ -19,7 +19,8 @@ const fails = (s, o, re) => assert.throws(() => q(s, o), re);
 
 before(async () => {
   pg = await startPg(); url = pg.url;
-  q("drop schema if exists public cascade; create schema public; grant usage, create on schema public to public;");
+  // Repartir de zéro, même sur une base déjà utilisée (PGURL) : schémas de test et imitation de Supabase.
+  q("drop schema if exists public cascade; drop schema if exists storage cascade; drop schema if exists auth cascade; create schema public; grant usage, create on schema public to public;");
   q(readFileSync(join(web, "supabase/tests/auth_stub.sql"), "utf8"));
   q("truncate auth.users cascade;");
   for (const f of readdirSync(join(web, "supabase/migrations")).sort()) q(readFileSync(join(web, "supabase/migrations", f), "utf8"));
