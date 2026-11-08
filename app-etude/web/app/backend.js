@@ -139,7 +139,7 @@
     <button type="button" class="btn ghost voir" data-voir="${id}" aria-label="Afficher le mot de passe" aria-pressed="false">👁</button></div></div>`;
   const champNiveau = (pref, v = {}) => `
     <div class="field"><span class="lbl" id="${pref}-niveau-lbl">Ton niveau d'étude</span>
-      <p class="hint">Claude adapte ses explications à ton niveau.${pref === "m" ? "" : " Tu pourras le changer dans « Mon compte »."}</p>
+      <p class="hint">Ton tuteur adapte ses explications à ton niveau.${pref === "m" ? "" : " Tu pourras le changer dans « Mon compte »."}</p>
       <div class="choix" role="radiogroup" aria-labelledby="${pref}-niveau-lbl">${Object.entries(NIVEAUX).map(([k, n]) =>
         `<label class="type"><input type="radio" name="${pref}-niveau" id="${pref}-niveau-${k}" value="${k}" ${v.niveau === k ? "checked" : ""}><span><b>${n}</b></span></label>`).join("")}</div></div>
     <div class="field"><span class="lbl" id="${pref}-age-lbl">As-tu 18 ans ou plus ?</span>
@@ -173,13 +173,13 @@
     $("#top").innerHTML = `<div class="brand">${ICONE}<span>Carnet d'étude</span></div>`;
     const app = $("#app");
     const titres = {
-      connexion: ["Bienvenue", "Connecte-toi pour retrouver tes projets sur tous tes appareils. Pas besoin de compte Claude."],
-      inscription: ["Créer ton compte", "Quelques informations, et c'est parti. Pas besoin de compte Claude."],
+      connexion: ["Bienvenue", "Connecte-toi pour retrouver tes projets sur tous tes appareils."],
+      inscription: ["Créer ton compte", "Quelques informations, et c'est parti."],
       code: ["Connexion par code", "On t'envoie un e-mail avec un code et un lien : pas besoin de mot de passe."],
       oubli: ["Mot de passe oublié", "On t'envoie un e-mail avec un code et un lien pour choisir un nouveau mot de passe."],
       "nouveau-mdp": ["Nouveau mot de passe", "Choisis ton nouveau mot de passe."],
       "verif-email": ["Active ton compte", ""],
-      profil: ["Ton profil", "Encore une étape : dis-nous ton niveau pour que Claude s'adapte à toi."],
+      profil: ["Ton profil", "Encore une étape : dis-nous ton niveau pour que ton tuteur s'adapte à toi."],
     };
     const [titre, sous] = titres[vue];
     const avecFournisseurs = vue === "connexion" || vue === "inscription";
@@ -397,7 +397,7 @@
       const p = { prenom: $("#m-prenom").value.trim().slice(0, 80), ...n, updated_at: new Date().toISOString() };
       const { error } = await sb.from("profils").update(p).eq("owner", session.user.id);
       if (error) return err(traduire(error));
-      profil = { ...profil, ...p }; err("Profil enregistré. Claude s'adapte dès ton prochain message.", true);
+      profil = { ...profil, ...p }; err("Profil enregistré. Ton tuteur s'adapte dès ton prochain message.", true);
     }); };
     $("#f-compte-mdp").onsubmit = ev => { ev.preventDefault(); err(""); occupe($("#m-mdp-go"), "Enregistrement…", async () => {
       const p1 = $("#m-mdp").value, p2 = $("#m-mdp2").value;

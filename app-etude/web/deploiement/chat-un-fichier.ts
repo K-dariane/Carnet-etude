@@ -59,10 +59,10 @@ export const MESSAGES_ERREUR: Record<string, string> = {
   requete_invalide: "La demande envoyée n'est pas valide. Recharge la page et réessaie.",
   prompt_too_large: "Trop de contenu envoyé d'un coup. Désactive quelques supports ou efface la conversation.",
   image_rejected: "Cette image n'a pas été acceptée (format ou taille). Essaie une autre photo.",
-  rate_limited: "Claude est très demandé en ce moment. Réessaie dans une minute.",
-  refused: "Claude n'a pas pu répondre à cette demande. Reformule-la.",
-  empty_completion: "Claude n'a rien répondu. Reformule ou demande moins à la fois.",
-  indisponible: "Claude est indisponible pour le moment. Réessaie dans quelques minutes.",
+  rate_limited: "Le tuteur est très demandé en ce moment. Réessaie dans une minute.",
+  refused: "Le tuteur n'a pas pu répondre à cette demande. Reformule-la.",
+  empty_completion: "Le tuteur n'a rien répondu. Reformule ou demande moins à la fois.",
+  indisponible: "Le tuteur est indisponible pour le moment. Réessaie dans quelques minutes.",
   erreur_serveur: "Problème sur le serveur. Réessaie ; si ça continue, préviens l'équipe.",
 };
 
