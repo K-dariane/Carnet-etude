@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confidentialité – Carnet d'étude</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<style>
+:root {
+  --paper: #f3f5fa; --surface: #ffffff; --ink: #161b2e; --muted: #5a6280; --line: #dde2ee; --accent: #2442c4;
+  --font: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #0e1120; --surface: #171b2d; --ink: #e9ecf8; --muted: #9ba3c2; --line: #2a3051; --accent: #8aa2ff; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --paper: #0e1120; --surface: #171b2d; --ink: #e9ecf8; --muted: #9ba3c2; --line: #2a3051; --accent: #8aa2ff; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--font); }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 56px; }
+h1 { font-size: 1.7rem; line-height: 1.2; margin: 8px 0 4px; }
+h2 { font-size: 1.15rem; margin: 28px 0 6px; }
+p, li { margin: 6px 0; }
+a { color: var(--accent); }
+.meta { color: var(--muted); font-size: .9rem; }
+.carte { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 16px 0; }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+th { width: 34%; }
+@media (max-width: 520px) { th, td { display: block; width: 100%; border: 0; padding: 4px 0; } tr { display: block; border-bottom: 1px solid var(--line); padding: 8px 0; } }
+</style>
+</head>
+<body>
+<main>
+<p><a href="./">← Retour au Carnet d'étude</a></p>
+<h1>Politique de confidentialité</h1>
+<p class="meta">Carnet d'étude, version de test. Dernière mise à jour : 7 novembre 2026. Version provisoire, en cours de relecture.</p>
+
+<div class="carte">
+<p><b>En bref</b> : on garde seulement ce qu'il faut pour que ton carnet marche (ton compte, ton niveau, tes projets, tes cours, tes conversations avec le tuteur IA). On ne vend rien, on n'affiche pas de publicité. Tu peux demander la suppression de toutes tes données à tout moment.</p>
+</div>
+
+<h2>Qui est responsable</h2>
+<p>Le Carnet d'étude est un projet personnel en phase de test. Contact pour toute question sur tes données : <b id="contact">adresse de contact à préciser</b>.</p>
+
+<h2>Ce que nous enregistrons, et pourquoi</h2>
+<table>
+<tr><th>Ton compte</th><td>Adresse e-mail, mot de passe (enregistré chiffré, illisible pour nous), ou identifiant Google ou Facebook si tu te connectes avec eux. Sert à te connecter et à retrouver tes projets.</td></tr>
+<tr><th>Ton profil</th><td>Prénom, niveau d'étude (primaire, secondaire ou universitaire), si tu as 18 ans ou plus et, sinon, l'accord d'un parent. Le niveau sert à adapter les explications du tuteur IA.</td></tr>
+<tr><th>Tes projets d'étude</th><td>Titres, matières, objectifs, échéances, plans de travail, cours que tu ajoutes (PDF, photos, notes et leur texte), conversations avec le tuteur IA.</td></tr>
+<tr><th>Ta consommation IA</th><td>Nombre de « tokens » utilisés par demande, pour appliquer le quota de la semaine et suivre les coûts. Pas le contenu des messages.</td></tr>
+</table>
+<p>Nous n'enregistrons pas ta position, tes contacts ni ton historique de navigation. Pas de publicité, pas de revente de données.</p>
+
+<h2>Qui d'autre traite tes données</h2>
+<ul>
+<li><b>Supabase</b> : hébergement de la base de données, des fichiers et des comptes. Région des serveurs : à préciser.</li>
+<li><b>Anthropic</b> (Claude, le tuteur IA) : reçoit, pour chaque question, ta question, tes cours activés et les échanges récents du projet, afin de rédiger la réponse. Ces données sont traitées selon les conditions commerciales d'Anthropic, qui ne les utilisent pas pour entraîner leurs modèles.</li>
+<li><b>Google</b> ou <b>Facebook</b> : seulement si tu choisis de te connecter avec eux. Ils nous transmettent ton adresse e-mail et ton nom.</li>
+<li><b>GitHub Pages</b> : hébergement des pages de l'app. <b>Gmail</b> : envoi des e-mails de connexion.</li>
+</ul>
+
+<h2>Combien de temps</h2>
+<p>Tes données sont gardées tant que ton compte existe. Quand tu supprimes un projet, ses cours et sa conversation sont supprimés avec lui. Quand ton compte est supprimé, toutes ses données le sont aussi.</p>
+
+<h2>Mineurs</h2>
+<p>Si tu as moins de 18 ans, tu ne peux utiliser le Carnet d'étude qu'avec l'accord d'un parent ou d'un tuteur. Le parent peut demander à tout moment la consultation ou la suppression des données de son enfant, à l'adresse de contact ci-dessus.</p>
+
+<h2>Tes droits</h2>
+<p>Tu peux consulter, corriger ou supprimer tes données. Ton prénom et ton niveau se changent dans « Mon compte ». Pour tout le reste, écris à l'adresse de contact.</p>
+
+<h2 id="suppression">Supprimer tes données</h2>
+<ol>
+<li>Pour supprimer un projet, avec ses cours et sa conversation : ouvre le projet → « Modifier » → « Supprimer le projet » (deux clics).</li>
+<li>Pour supprimer ton compte et toutes tes données, y compris si tu t'es connecté avec Google ou Facebook : écris à l'adresse de contact ci-dessus, depuis l'adresse e-mail de ton compte, avec pour objet « Suppression de mon compte ». La suppression est faite sous 30 jours, et tu reçois une confirmation.</li>
+</ol>
+
+<h2>Modifications</h2>
+<p>Cette page peut évoluer. La date de mise à jour est indiquée en haut.</p>
+</main>
+</body>
+</html>

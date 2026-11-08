@@ -167,6 +167,19 @@ test("forme envoyée par l'app (consignes puis question, deux messages étudiant
   assert.deepEqual(requetes[0].body.messages, [{ role: "user", content: "C\n\nQ1" }, { role: "assistant", content: "R1" }, { role: "user", content: "Q2" }]);
 });
 
+test("plan : format imposé à Claude (sorties structurées) ; format inconnu refusé", async () => {
+  await lignes(await handle(requete({ prompt: "Propose un plan", tache: "plan", format: "plan" }), deps()));
+  const oc = requetes[0].body.output_config;
+  assert.equal(oc.effort, "medium"); assert.equal(oc.format.type, "json_schema");
+  assert.deepEqual(oc.format.schema.required, ["etapes"]);
+  assert.deepEqual(oc.format.schema.properties.etapes.items.required, ["titre", "detail"]);
+  requetes = [];
+  await lignes(await handle(requete({ prompt: "Bonjour", tache: "seance" }), deps()));
+  assert.equal(requetes[0].body.output_config.format, undefined, "pas de format imposé pour une séance");
+  const res = await handle(requete({ prompt: "x", format: "roman" }), deps());
+  assert.equal(res.status, 400); assert.match((await res.json()).erreur.raison, /format de réponse « roman » inconnu/);
+});
+
 test("requêtes invalides : 400 ou 413, message en français", async () => {
   const cas = [
     [{}, 400, "requete_invalide"],

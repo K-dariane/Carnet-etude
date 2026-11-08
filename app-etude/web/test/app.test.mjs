@@ -51,7 +51,8 @@ async function contexte() {
     const v = preparer(body);
     if ("code" in v) { refusees.push({ body, v }); return r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ erreur: { code: v.code, message: "La demande envoyée n'est pas valide. Recharge la page et réessaie.", raison: v.raison } }) }); }
     if (reponseChat) return reponseChat(r, body);
-    if (body.tache === "plan") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson('```json\n[{"titre":"Revoir les primitives","detail":"Tableau"},{"titre":"Formule IPP","detail":"Choisir u et v\'"},{"titre":"Exercices","detail":"10 calculs"}]\n```') });
+    // Avec les sorties structurées, Claude répond { "etapes": [...] } (format imposé par la fonction serveur).
+    if (body.tache === "plan") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson('{"etapes":[{"titre":"Revoir les primitives","detail":"Tableau"},{"titre":"Formule IPP","detail":"Choisir u et v\'"},{"titre":"Exercices","detail":"10 calculs"}]}') });
     if (body.tache === "resume") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("- Notions vues : IPP\n- Difficulté : choix de u") });
     if (body.tache === "transcription") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("Théorème de Rolle : f(a) = f(b)") });
     r.fulfill({ contentType: "application/x-ndjson", body: ndjson(REPONSE) });
@@ -146,10 +147,21 @@ test("plan : généré par Claude via la fonction serveur, étape cochée", asyn
   const a = appels.at(-1);
   assert.equal(a.body.tache, "plan"); assert.equal(a.body.tier, "default"); assert.equal(typeof a.body.prompt, "string");
   assert.ok(a.body.prompt.includes("Niveau de l'élève : secondaire."), "niveau aussi pour le plan");
+  assert.equal(a.body.format, "plan", "format de réponse demandé à la fonction serveur");
   assert.equal(a.headers.authorization, "Bearer jeton-moi@test.cd"); assert.equal(a.headers.apikey, "cle-publique-test");
   await pg.click(".step input[type=checkbox]");
   await attendre(() => window.__fake.tables.projets[0].plan.length === 3 && window.__fake.tables.projets[0].plan[0].fait === true);
   assert.deepEqual(Object.keys((await fake()).tables.projets[0].plan[0]).sort(), ["detail", "fait", "id", "titre"]);
+});
+
+test("plan : réponse de Claude lue quelle que soit sa forme", async () => {
+  const P = '[{"titre":"Revoir","detail":"x"}]';
+  const cas = { "JSON pur": P, "bloc json": "```json\n" + P + "\n```", "phrase avant": "Voici ton plan :\n" + P,
+    "phrase après": P + "\n\nBon courage !", "avant et après": "Voici :\n" + P + "\nBonne révision", "objet etapes": '{"etapes":' + P + "}",
+    "crochets dans le texte": "Plan [4 étapes] :\n" + P + " [fin]" };
+  const r = await pg.evaluate(c => Object.fromEntries(Object.entries(c).map(([k, v]) => { const o = window.__extraireJson(v); return [k, Array.isArray(o) ? o : o && o.etapes]; })), cas);
+  for (const [k, v] of Object.entries(r)) assert.deepEqual(v, [{ titre: "Revoir", detail: "x" }], k);
+  assert.equal(await pg.evaluate(() => window.__extraireJson("pas de json ici")), undefined);
 });
 
 test("séance : réponse affichée, contexte avec les supports, conversation enregistrée", async () => {
