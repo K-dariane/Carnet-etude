@@ -25,6 +25,11 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 
 **Connexion** : e-mail et mot de passe (création de compte avec prénom, niveau d'étude et, pour les mineurs, accord d'un parent), « Mot de passe oublié ? », connexion par code reçu par e-mail, Google. Le bouton Facebook apparaît dès qu'il est activé dans Supabase. Apple n'est pas proposé. La session reste ouverte sur l'appareil. Réglages et guides pas à pas : **`GUIDE-CONNEXION.md`**.
 
+**Voix** (`app/voix.js`, gratuite, avec la reconnaissance et la voix du téléphone) :
+- **🎤 Dictée** : la question s'écrit pendant qu'on parle. Marche avec Chrome (Android) et Safari (iPhone), pas avec Firefox. Le son est traité par Google ou Apple : c'est indiqué dans la page de confidentialité.
+- **🔊 Écoute** : chaque réponse du tuteur peut être lue à voix haute. `paroles()` traduit les formules (« \frac{a}{b} » → « a sur b », « x^2 » → « x au carré », intégrales, limites, sommes, symboles), retire le Markdown et les emoji, et annonce les schémas et les tableaux au lieu de les lire.
+- **Mode oral** : le micro s'ouvre, la question part toute seule à la fin de la phrase, la réponse est lue, puis le micro se rouvre. La consigne `CONSIGNE_ORALE` (réponses courtes, formules dites en mots) n'est envoyée que dans ce mode.
+
 **Niveau d'étude** : table `profils` (migration `20261107000004_profils.sql`). L'app ajoute aux consignes de Claude une ligne adaptée au niveau (primaire, secondaire, universitaire), pour les séances et le plan. Le niveau se change dans « Mon compte » (icône en haut de l'accueil).
 
 **Fichiers** : la base garde la référence `storage:supports/<chemin>`. L'app la remplace par un lien temporaire de 24 h pour l'affichage, et refait le lien quand tu reviens sur la page.

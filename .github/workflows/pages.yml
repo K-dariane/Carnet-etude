@@ -33,7 +33,7 @@ jobs:
       - name: Version des fichiers
         run: |
           V="${GITHUB_SHA::8}"
-          sed -i "s#src=\"config.js\"#src=\"config.js?v=$V\"#; s#src=\"backend.js\"#src=\"backend.js?v=$V\"#" app-etude/web/app/index.html
+          sed -i "s#src=\"config.js\"#src=\"config.js?v=$V\"#; s#src=\"backend.js\"#src=\"backend.js?v=$V\"#; s#src=\"voix.js\"#src=\"voix.js?v=$V\"#" app-etude/web/app/index.html
           grep -c "?v=$V" app-etude/web/app/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
