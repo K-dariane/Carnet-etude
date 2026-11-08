@@ -86,6 +86,9 @@ type Msg = { role: "user" | "assistant"; content: string };
 type Img = { media_type: string; data: string };
 
 const enc = new TextEncoder();
+/* Texte « bien formé » : un caractère spécial (𝑥, 𝜋, emoji…) tient en deux morceaux ; si une coupe du texte
+   en laisse un seul, l'API refuse toute la demande (« unexpected end of hex escape »). On le remplace par �. */
+export const bienForme = (t: string) => t.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, c => (c.length === 2 ? c : "\uFFFD"));
 const octets = (s: string) => enc.encode(s).length;
 
 function cors(req: Request, deps: Deps): Record<string, string> {
@@ -123,10 +126,11 @@ export function preparer(body: unknown): { code: string; raison?: string } | { m
     if (!m || typeof m.content !== "string") return refus(`message ${i + 1} : contenu absent`);
     if (m.role !== "user" && m.role !== "assistant") return refus(`message ${i + 1} : rôle « ${String(m?.role)} » inconnu`);
     if (!m.content.trim()) continue;                       // message vide : ignoré
-    total += octets(m.content);
+    const contenu = bienForme(m.content);
+    total += octets(contenu);
     const prec = msgs[msgs.length - 1];
-    if (prec && prec.role === m.role) prec.content += "\n\n" + m.content;
-    else msgs.push({ role: m.role, content: m.content });
+    if (prec && prec.role === m.role) prec.content += "\n\n" + contenu;
+    else msgs.push({ role: m.role, content: contenu });
   }
   if (!msgs.length) return refus("tous les messages sont vides");
   if (msgs[0].role !== "user") return refus("le premier message doit venir de l'étudiant");

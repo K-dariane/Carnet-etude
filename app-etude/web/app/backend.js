@@ -458,6 +458,11 @@
     return out;
   };
 
+  /* Texte « bien formé » : un caractère spécial (𝑥, 𝜋, emoji…) tient en deux morceaux ; une coupe du texte peut
+     en laisser un seul, que la base et l'API refusent. On le remplace par �. */
+  const bienForme = t => t.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, c => (c.length === 2 ? c : "\uFFFD"));
+  window.__bienForme = bienForme;   // pour les tests
+
   /* ---------- Correspondance documents V1 ↔ lignes Supabase ---------- */
   const ms = v => v ? Date.parse(v) : undefined;
   const iso = v => Number.isFinite(v) ? new Date(v).toISOString() : undefined;
@@ -486,7 +491,7 @@
   };
   function versLigne(table, data, { complet }) {
     const T = TABLES[table]; const ligne = {}; const extra = {};
-    for (const [k, v] of Object.entries(JSON.parse(JSON.stringify(data)))) {
+    for (const [k, v] of Object.entries(JSON.parse(JSON.stringify(data, (_, x) => typeof x === "string" ? bienForme(x) : x)))) {
       if (T.cols[k]) ligne[T.cols[k]] = T.valeur(k, v); else extra[k] = v;
     }
     if (complet && table !== "fils") ligne.extra = extra;

@@ -29,6 +29,8 @@
   const err = (message, code = "42501") => ({ data: null, error: { message, code } });
   const copie = o => JSON.parse(JSON.stringify(o));
   const verifier = (table, row) => {
+    // Comme Postgres : un texte avec un demi-caractère (coupe au milieu de 𝑥, emoji…) est refusé.
+    if (/\\ud[89a-f][0-9a-f]{2}/i.test(JSON.stringify(row))) return "unsupported Unicode escape sequence";
     for (const k of Object.keys(row)) if (!COLONNES[table].includes(k)) return `column "${k}" of relation "${table}" does not exist`;
     if (row.owner !== uid()) return "new row violates row-level security policy";
     if (table === "profils") return !["primaire", "secondaire", "universitaire"].includes(row.niveau) || typeof row.majeur !== "boolean" || !(row.majeur || row.accord_parental) ? "violates check constraint" : null;
