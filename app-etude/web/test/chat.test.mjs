@@ -198,6 +198,13 @@ test("autre refus de l'API (400) : erreur avec le détail de l'API", async () =>
   assert.equal(requetes.length, 1, "pas de nouvel essai sans format imposé");
 });
 
+test("texte coupé au milieu d'un caractère spécial : nettoyé avant l'envoi à l'API", async () => {
+  await lignes(await handle(requete({ messages: [{ role: "user", content: "Cours : Soit \ud835" }, { role: "user", content: "et 𝜋 ≈ 3,14 \udc65" }], tache: "plan" }), deps()));
+  const c = requetes[0].body.messages[0].content;
+  assert.equal(c, "Cours : Soit \ufffd\n\net 𝜋 ≈ 3,14 \ufffd");
+  assert.ok(c.isWellFormed());
+});
+
 test("requêtes invalides : 400 ou 413, message en français", async () => {
   const cas = [
     [{}, 400, "requete_invalide"],

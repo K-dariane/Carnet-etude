@@ -15,7 +15,7 @@ const nm = join(web, "node_modules");
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
-let browser, ctx, pg, erreurs = [], appels = [], refusees = [], reponseChat = null;
+let browser, ctx, pg, erreurs = [], appels = [], refusees = [], reponseChat = null, demiCaracteres = 0;
 let reglages = { external: { email: true, google: true, facebook: false, apple: false } };
 const REPONSE = "### Intégration par parties\nD'après ton cours *cours*, \\[ \\int u v' = [uv] - \\int u' v \\]\n- Résultat : \\(x e^x - e^x + C\\)";
 const ndjson = (texte, extra = {}) => texte.match(/[\s\S]{1,25}/g).map(d => JSON.stringify({ type: "texte", delta: d })).join("\n") + "\n" +
@@ -49,6 +49,11 @@ async function contexte() {
     appels.push({ body, headers });
     // La fausse fonction applique la vraie vérification du serveur : l'app doit envoyer des demandes acceptées.
     const v = preparer(body);
+    // Comme la vraie API : un demi-caractère (coupe au milieu de 𝑥, emoji…) rend la demande illisible.
+    if (!("code" in v) && v.messages.some(m => typeof m.content === "string" ? !m.content.isWellFormed() : m.content.some(b => b.text && !b.text.isWellFormed()))) {
+      demiCaracteres++;
+      return r.fulfill({ contentType: "application/x-ndjson", body: JSON.stringify({ type: "erreur", code: "requete_invalide", message: "La demande envoyée n'est pas valide.", detail: "The request body is not valid JSON: unexpected end of hex escape" }) + "\n" });
+    }
     if ("code" in v) { refusees.push({ body, v }); return r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ erreur: { code: v.code, message: "La demande envoyée n'est pas valide. Recharge la page et réessaie.", raison: v.raison } }) }); }
     if (reponseChat) return reponseChat(r, body);
     // Avec les sorties structurées, Claude répond { "etapes": [...] } (format imposé par la fonction serveur).
@@ -174,6 +179,29 @@ test("plan adaptatif : les étapes faites sont gardées, Claude propose la suite
   const plan = (await fake()).tables.projets[0].plan;
   assert.deepEqual(plan.map(s => s.fait), [true, false, false]);
   assert.equal(await pg.locator(".step").count(), 3);
+});
+
+test("plan avec un long cours de maths coupé au milieu d'un caractère spécial (𝑥) : le plan arrive quand même", async () => {
+  await pg.click("[data-tab=supports]"); await pg.click('summary:has-text("Écrire une note")');
+  // 80 001 caractères : la coupe à 40 000 du contexte du plan tombe au milieu d'un 𝑥 (deux morceaux).
+  await pg.evaluate(() => { document.querySelector("#note-nom").value = "Cours long"; document.querySelector("#note-txt").value = "a" + "𝑥".repeat(40000); });
+  await pg.click("[data-a=add-note]");
+  await attendre(() => window.__fake.tables.supports.some(s => s.nom === "Cours long"));
+  await pg.click("[data-tab=plan]"); await pg.click("#genplan"); await pg.click("#genplan");
+  await attendre(() => /Plan adapté/.test(document.querySelector("#toast").textContent), 15000);
+  assert.equal(demiCaracteres, 0, "aucune demande avec un demi-caractère n'atteint l'API");
+  assert.ok(!appels.at(-1).body.prompt.isWellFormed(), "le cas est bien reproduit : l'app envoie un texte coupé…");
+  // …et c'est la fonction serveur qui le nettoie (vérifié par la fausse fonction, qui applique preparer()).
+  const id = (await fake()).tables.supports.find(s => s.nom === "Cours long").id;
+  await pg.click("[data-tab=supports]");
+  const btn = pg.locator(`[data-a=del-sup][data-id="${id}"]`); await btn.click(); await btn.click();
+  await attendre(() => !window.__fake.tables.supports.some(s => s.nom === "Cours long"));
+  await pg.click("[data-tab=plan]");
+});
+
+test("enregistrement : un demi-caractère est nettoyé avant d'aller dans la base", async () => {
+  assert.equal(await pg.evaluate(() => window.__bienForme("Soit \ud835")), "Soit \ufffd");
+  assert.equal(await pg.evaluate(() => window.__bienForme("𝑥 ∈ ℝ 😀")), "𝑥 ∈ ℝ 😀");
 });
 
 test("plan : réponse sans étape lisible ou erreur du serveur → message clair, ancien plan intact", async () => {
