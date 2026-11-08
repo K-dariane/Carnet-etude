@@ -11,9 +11,11 @@ const run = (cmd, args, opts = {}) => asRoot
   : execFileSync(cmd, args, opts);
 
 function pgBin() {
-  for (const v of ["17", "16", "15"]) { const d = `/usr/lib/postgresql/${v}/bin`; if (existsSync(d)) return d; }
-  const found = existsSync("/usr/lib/postgresql") ? readdirSync("/usr/lib/postgresql") : [];
-  throw new Error("Postgres 15+ introuvable (trouvé : " + (found.join(", ") || "rien") + "). Installe-le ou définis PGURL.");
+  // La version installée la plus récente, à partir de 15 (les machines GitHub passent d'une version à l'autre).
+  const trouvees = existsSync("/usr/lib/postgresql") ? readdirSync("/usr/lib/postgresql") : [];
+  const version = trouvees.map(Number).filter(v => v >= 15 && existsSync(`/usr/lib/postgresql/${v}/bin/initdb`)).sort((a, b) => b - a)[0];
+  if (version) return `/usr/lib/postgresql/${version}/bin`;
+  throw new Error("Postgres 15+ introuvable (trouvé : " + (trouvees.join(", ") || "rien") + "). Installe-le ou définis PGURL.");
 }
 
 export async function startPg() {

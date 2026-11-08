@@ -20,6 +20,21 @@ concurrency:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    # Base de test dédiée, même version majeure que Supabase : les tests ne dépendent pas de la version
+    # installée sur la machine GitHub (elle est passée de 16 à 18 sans prévenir).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGURL: postgresql://postgres:postgres@localhost:5432/postgres
     defaults:
       run:
         working-directory: app-etude/web
