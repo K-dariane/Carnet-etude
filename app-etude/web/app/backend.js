@@ -376,6 +376,7 @@
           ${champMdp("m-mdp2", "Confirme le mot de passe", "new-password")}
           <button class="btn" type="submit" id="m-mdp-go">Enregistrer le mot de passe</button>
         </form></details>
+      <p class="hint" id="compte-credit">Crédit d'étude d'aujourd'hui : …</p>
       <p class="err" id="compte-err" role="alert" hidden></p>
       <div class="row" style="justify-content:space-between"><button class="btn danger" type="button" id="m-sortir">Se déconnecter</button>
         <a class="hint" href="confidentialite.html">Confidentialité, supprimer mon compte</a></div>
@@ -408,6 +409,14 @@
       $("#m-mdp").value = $("#m-mdp2").value = ""; err("Mot de passe enregistré.", true);
     }); };
     setTimeout(() => $("#m-prenom").focus(), 50);
+    // Crédit du jour (coût réel des réponses du tuteur, remis à zéro à minuit).
+    sb.rpc("ia_mon_quota").then(({ data, error }) => {
+      const c = $("#compte-credit"); if (!c) return;
+      const d = Array.isArray(data) ? data[0] : data;
+      if (error || !d || !Number(d.limite)) { c.hidden = true; return; }
+      const reste = Math.max(0, Math.round(100 - 100 * Number(d.utilise) / Number(d.limite)));
+      c.textContent = `Crédit d'étude d'aujourd'hui : il te reste environ ${reste} %. Il se recharge chaque nuit à minuit.`;
+    });
   }
 
   // Styles propres aux écrans de compte (le reste vient de l'app).
@@ -687,7 +696,7 @@
     if (dernierQuota && dernierQuota.limite && dernierQuota.utilise / dernierQuota.limite >= 0.8 && typeof window.toast === "function" && !sample._prevenu) {
       sample._prevenu = true;
       const reste = Math.max(0, Math.round(100 - 100 * dernierQuota.utilise / dernierQuota.limite));
-      setTimeout(() => window.toast(`Il te reste environ ${reste} % de ton quota IA de la semaine.`, 6000), 800);
+      setTimeout(() => window.toast(`Il te reste environ ${reste} % de ton crédit d'étude d'aujourd'hui.`, 6000), 800);
     }
     return { text: fin.text, truncated: !!fin.tronque, modelTierApplied: corps.tier };
   }

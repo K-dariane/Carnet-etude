@@ -18,6 +18,22 @@ import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 // Erreurs avant le flux : statut HTTP + { erreur: { code, message } }.
 
 
+/* Prix en $ par million de tokens : entrée, sortie, cache lu, cache écrit (5 min). Mêmes valeurs que ia_cout() en SQL
+   (migration 20261108000005_credit_jour.sql). Haiku 5.5 coûte 5 fois plus au-delà de 100 000 tokens d'entrée. */
+export const TARIFS: Record<string, [number, number, number, number]> = {
+  "claude-haiku-5-5": [0.10, 0.50, 0.01, 0.125],
+  "claude-haiku-5-5:long": [0.50, 2.50, 0.05, 0.625],
+  "claude-sonnet-5-5": [2.00, 10.00, 0.20, 2.50],
+  autre: [5.00, 25.00, 0.50, 6.25],   // autre modèle (repli en cas de refus) : tarif prudent
+};
+/* Coût d'un appel en micro-dollars (1 $ = 1 000 000) : tokens × ($ par million de tokens). */
+export function cout(modele: string, u: { input_tokens: number; cache_creation_tokens: number; cache_read_tokens: number; output_tokens: number }): number {
+  const haiku = modele.startsWith("claude-haiku-5-5");
+  const long = u.input_tokens + u.cache_creation_tokens + u.cache_read_tokens > 100000;
+  const t = haiku ? TARIFS[long ? "claude-haiku-5-5:long" : "claude-haiku-5-5"] : modele.startsWith("claude-sonnet-5-5") ? TARIFS["claude-sonnet-5-5"] : TARIFS.autre;
+  return Math.round(u.input_tokens * t[0] + u.output_tokens * t[1] + u.cache_read_tokens * t[2] + u.cache_creation_tokens * t[3]);
+}
+
 export const MODELES = {
   default: { model: "claude-haiku-5-5", effort: "medium" },
   complex: { model: "claude-sonnet-5-5", effort: "high" },
@@ -55,7 +71,7 @@ export const FORMATS: Record<string, Record<string, unknown>> = {
 
 export const MESSAGES_ERREUR: Record<string, string> = {
   session_expired: "Ta session a expiré : reconnecte-toi puis réessaie.",
-  quota_atteint: "Tu as utilisé tout ton quota de la semaine. Il se remet à zéro lundi.",
+  quota_atteint: "Tu as utilisé tout ton crédit d'étude d'aujourd'hui. Il se recharge cette nuit à minuit.",
   requete_invalide: "La demande envoyée n'est pas valide. Recharge la page et réessaie.",
   prompt_too_large: "Trop de contenu envoyé d'un coup. Désactive quelques supports ou efface la conversation.",
   image_rejected: "Cette image n'a pas été acceptée (format ou taille). Essaie une autre photo.",
@@ -71,6 +87,7 @@ export interface Appel {
   owner: string; tache: string; modele: string;
   statut: "ok" | "tronque" | "refus" | "interrompu" | "erreur";
   input_tokens: number; cache_creation_tokens: number; cache_read_tokens: number; output_tokens: number;
+  cout_microdollars?: number;
 }
 export interface Deps {
   anthropic: Pick<Anthropic, "beta">;
@@ -210,7 +227,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     return erreur(req, deps, prep.code === "prompt_too_large" ? 413 : 400, prep.code, prep.raison ? { raison: prep.raison } : {});
   }
 
-  // 3. Quota de la semaine
+  // 3. Crédit du jour
   let q: Quota;
   try { q = await deps.quota(user.id); }
   catch (e) { deps.log?.("quota", e); return erreur(req, deps, 500, "erreur_serveur"); }
@@ -261,7 +278,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
         else {
           statut = fin.stop_reason === "max_tokens" ? "tronque" : "ok";
           envoyer({ type: "fin", text: texte, tronque: statut === "tronque", modele, tokens: total(),
-            quota: { ...q, utilise: q.utilise + total() } });
+            quota: { ...q, utilise: q.utilise + cout(modele, usage) } });
         }
       } catch (e) {
         if (ctl.signal.aborted || e instanceof deps.sdk.APIUserAbortError) statut = "interrompu";
@@ -271,7 +288,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
         }
       } finally {
         if (total() > 0 || statut !== "erreur") {
-          await deps.enregistrer({ owner: user.id, tache: prep.tache, modele, statut, ...usage }).catch(e => deps.log?.("enregistrer", e));
+          await deps.enregistrer({ owner: user.id, tache: prep.tache, modele, statut, ...usage, cout_microdollars: cout(modele, usage) }).catch(e => deps.log?.("enregistrer", e));
         }
         if (!ferme) { ferme = true; try { c.close(); } catch { /* déjà ferme */ } }
       }
