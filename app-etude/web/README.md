@@ -86,7 +86,7 @@ L'app n'appelle jamais Claude directement : elle appelle la fonction `chat`, qui
 | --- | --- |
 | 1 | Vérifie que le testeur est connecté (jeton Supabase). Sinon : `session_expired`. |
 | 2 | Vérifie la demande (rôles, tailles, images). Sinon : `requete_invalide`, `prompt_too_large` ou `image_rejected`. |
-| 3 | Vérifie le quota de la semaine. S'il est épuisé : `quota_atteint`, avec la date de remise à zéro. |
+| 3 | Vérifie le crédit d'étude du jour. S'il est épuisé : `quota_atteint`, avec l'heure de la remise à zéro (minuit). |
 | 4 | Appelle Claude et renvoie le texte au fil de l'écriture. |
 | 5 | Enregistre les tokens consommés dans `ia_appels`, même si la réponse est arrêtée en cours de route. |
 
