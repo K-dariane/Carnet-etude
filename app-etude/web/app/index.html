@@ -314,18 +314,18 @@ function progressHtml(p) {
   return `<div class="progress"><div class="bar" role="progressbar" aria-valuenow="${g.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${g.pct}%"></i></div><span>${g.done}/${g.total} étapes</span></div>`;
 }
 const ERR = {
-  not_granted: "Le carnet n'a pas l'autorisation d'utiliser Claude. Recharge la page pour qu'elle te soit redemandée.",
-  rate_limited: "Limite d'utilisation de Claude atteinte pour le moment. Réessaie un peu plus tard.",
-  session_expired: "Ta session a expiré : reconnecte-toi à Claude puis recharge la page.",
-  refused: "Claude n'a pas pu répondre à cette demande. Reformule-la.",
+  not_granted: "Le carnet n'a pas l'autorisation d'utiliser le tuteur. Recharge la page pour qu'elle te soit redemandée.",
+  rate_limited: "Le tuteur est très sollicité pour le moment. Réessaie un peu plus tard.",
+  session_expired: "Ta session a expiré : reconnecte-toi puis recharge la page.",
+  refused: "Le tuteur n'a pas pu répondre à cette demande. Reformule-la.",
   prompt_too_large: "Trop de contenu envoyé d'un coup. Désactive quelques supports ou efface la conversation.",
   image_rejected: "Cette image n'a pas été acceptée (format ou taille). Essaie une autre photo.",
-  images_unavailable: "L'envoi d'images à Claude n'est pas disponible ici.",
-  sampling_disabled: "Claude n'est pas disponible pour ce compte.",
-  empty_completion: "Claude n'a rien répondu. Reformule ou demande moins à la fois.",
+  images_unavailable: "L'envoi d'images au tuteur n'est pas disponible ici.",
+  sampling_disabled: "Le tuteur n'est pas disponible pour ce compte.",
+  empty_completion: "Le tuteur n'a rien répondu. Reformule ou demande moins à la fois.",
   invalid_json: "La réponse n'avait pas le format attendu. Réessaie."
 };
-const errMsg = e => (e && e.serveur && e.message) || (e && ERR[e.code]) || "Problème de connexion avec Claude. Réessaie.";
+const errMsg = e => (e && e.serveur && e.message) || (e && ERR[e.code]) || "Problème de connexion avec le tuteur. Réessaie.";
 
 /* Écritures : une à la fois par document */
 const chains = {};
@@ -534,7 +534,7 @@ function renderForm() {
   const first = !S.projets.length;
   const v = p || { titre: "", type: "etude", matiere: "", objectif: "", echeance: "" };
   $("#app").innerHTML = `
-    ${first ? `<div class="hello"><h1>Bienvenue dans ton carnet d'étude</h1><p>Crée ton premier projet. Tu pourras ensuite y ajouter tes cours (PDF, photos, notes) et travailler avec Claude sur ce contenu.</p></div>` : ""}
+    ${first ? `<div class="hello"><h1>Bienvenue dans ton carnet d'étude</h1><p>Crée ton premier projet. Tu pourras ensuite y ajouter tes cours (PDF, photos, notes) et travailler avec ton tuteur sur ce contenu.</p></div>` : ""}
     <form class="form" id="pform" novalidate>
       <div class="field"><label for="f-titre">Nom du projet</label>
         <input type="text" id="f-titre" required maxlength="80" placeholder="ex. Intégrales – Analyse 2" value="${esc(v.titre)}"></div>
@@ -546,7 +546,7 @@ function renderForm() {
       ${p && p.parentId ? `<div class="field"><label for="f-focus">Facette travaillée</label>
         <input type="text" id="f-focus" maxlength="120" placeholder="ex. Intégration par parties uniquement" value="${esc(p.focus || "")}"></div>` : ""}
       <div class="field"><label for="f-objectif">Objectif et contexte</label>
-        <p class="hint">Ce que tu veux atteindre, ton niveau, ce qui te bloque. Plus c'est précis, plus Claude s'adapte.</p>
+        <p class="hint">Ce que tu veux atteindre, ton niveau, ce qui te bloque. Plus c'est précis, plus ton tuteur s'adapte.</p>
         <textarea id="f-objectif" rows="4" maxlength="2000" placeholder="ex. Maîtriser l'intégration par parties pour l'examen de juin, j'ai du mal à choisir u et v'.">${esc(v.objectif)}</textarea></div>
       <div class="field"><label for="f-echeance">Échéance (facultatif)</label>
         <input type="date" id="f-echeance" value="${esc(v.echeance || "")}"></div>
@@ -647,7 +647,7 @@ function renderPanel() {
   if (S.panel === "evolve") {
     box.innerHTML = `<form class="panel" id="evform" novalidate>
       <h2>Faire évoluer le projet</h2>
-      <p class="hint">Le projet passe d'une forme à une autre (actuellement : ${esc(tn)}). Tes supports, ton plan et ta conversation sont conservés, et Claude adapte sa façon de t'accompagner.</p>
+      <p class="hint">Le projet passe d'une forme à une autre (actuellement : ${esc(tn)}). Tes supports, ton plan et ta conversation sont conservés, et ton tuteur adapte sa façon de t'accompagner.</p>
       <div class="field"><span class="lbl">Nouvelle forme</span>${typeRadios("evtype", null, [p.type])}</div>
       <div class="field"><label for="ev-obj">Objectif mis à jour (facultatif)</label>
         <textarea id="ev-obj" rows="3" maxlength="2000">${esc(p.objectif || "")}</textarea></div>
@@ -709,7 +709,7 @@ async function createSub(ev) {
       await ref.collection("supports").doc().set(d); n++;
     }
     if (doSum) {
-      btn.textContent = "Claude résume la séance…";
+      btn.textContent = "Le tuteur résume la séance…";
       try {
         const convo = S.thread.filter(t => t.role !== "event").map(t => (t.role === "user" ? "Étudiant : " : "Tuteur : ") + t.content).join("\n\n").slice(-120000);
         const r = await S.sample("Voici une séance de travail entre un étudiant et son tuteur sur le projet « " + p.titre + " ».\n\n" + convo +
@@ -823,7 +823,7 @@ function msgNode(turn) {
   } else if (turn.role === "user") {
     d.innerHTML = `<div class="bubble">${turn.img ? `<img class="thumb" src="${esc(turn.img)}" alt="Photo envoyée">` : turn.hadImg ? `<em>[photo jointe]</em>\n` : ""}${esc(turn.content)}</div>`;
   } else {
-    d.innerHTML = `<span class="who">Claude</span><div class="bubble md">${renderMd(turn.content)}</div>`;
+    d.innerHTML = `<span class="who">Tuteur</span><div class="bubble md">${renderMd(turn.content)}</div>`;
     d.dataset.tx = "0";
   }
   msgCache.set(key, d);
@@ -891,7 +891,7 @@ async function send() {
 
   S.streamEl = document.createElement("div");
   S.streamEl.className = "msg assistant";
-  S.streamEl.innerHTML = `<span class="who">Claude</span><div class="bubble md"><p class="thinking">Claude réfléchit…</p></div>`;
+  S.streamEl.innerHTML = `<span class="who">Tuteur</span><div class="bubble md"><p class="thinking">Le tuteur réfléchit…</p></div>`;
   renderThread();
   S.streamEl.scrollIntoView({ block: "end", behavior: "smooth" });
   const bubble = S.streamEl.querySelector(".bubble");
@@ -964,7 +964,7 @@ function renderSupports() {
   const canImg = !!(S.limits && S.limits.images);
   $("#tab").innerHTML = `
     <div class="drop" id="drop">
-      <div><b>Ajouter des supports de cours</b><p class="hint" style="margin:4px 0 0;color:var(--muted);font-size:.88rem">PDF de cours, photos de tes notes ou du tableau. Le texte est extrait une seule fois puis réutilisé à chaque séance.${canImg ? "" : " (La lecture des photos par Claude n'est pas disponible dans cette vue.)"}</p></div>
+      <div><b>Ajouter des supports de cours</b><p class="hint" style="margin:4px 0 0;color:var(--muted);font-size:.88rem">PDF de cours, photos de tes notes ou du tableau. Le texte est extrait une seule fois puis réutilisé à chaque séance.${canImg ? "" : " (La lecture des photos par le tuteur n'est pas disponible dans cette vue.)"}</p></div>
       <div class="row">
         <label class="btn primary" for="supfile">Choisir des fichiers</label>
         <input type="file" id="supfile" accept="application/pdf,image/*" multiple hidden>
@@ -1049,7 +1049,7 @@ async function addFiles(files) {
         let pagesNote = "";
         if (txt.replace(/\[Page \d+\]|\s/g, "").length < doc.numPages * 40) {
           // PDF scanné : on fait lire les pages par Claude
-          if (!S.sample || !(S.limits && S.limits.images)) throw new Error("PDF scanné : la lecture d'images par Claude n'est pas disponible ici.");
+          if (!S.sample || !(S.limits && S.limits.images)) throw new Error("PDF scanné : la lecture d'images par le tuteur n'est pas disponible ici.");
           const n = Math.min(doc.numPages, SCAN_MAX_PAGES); const per = Math.max(1, Math.min(S.limits.images.maxCount || 1, 5));
           txt = "";
           for (let i = 1; i <= n; i += per) {
@@ -1072,9 +1072,9 @@ async function addFiles(files) {
         const tronque = txt.length > SUPPORT_MAX;
         await addSupport(pid, { nom: f.name.replace(/\.pdf$/i, ""), kind: "pdf", texte: txt.slice(0, SUPPORT_MAX).trim() + pagesNote, pages: doc.numPages, tronque, ...up });
       } else if (f.type.startsWith("image/")) {
-        if (!S.sample || !(S.limits && S.limits.images)) throw new Error("la lecture des photos par Claude n'est pas disponible ici.");
+        if (!S.sample || !(S.limits && S.limits.images)) throw new Error("la lecture des photos par le tuteur n'est pas disponible ici.");
         const blob = await shrinkImage(f);
-        job.etat = "Claude lit la photo…"; renderJobs();
+        job.etat = "Le tuteur lit la photo…"; renderJobs();
         const txt = await transcribe([blob], f.name);
         job.etat = "enregistrement…"; renderJobs();
         const up = await upload(blob);
@@ -1094,14 +1094,14 @@ function renderPlan() {
   const p = proj(); const plan = Array.isArray(p.plan) ? p.plan : [];
   $("#tab").innerHTML = `
     <div class="section-head"><h2>Plan de travail</h2>
-      ${S.sample ? `<button class="btn ${plan.length ? "" : "primary"}" data-a="gen-plan" id="genplan">${plan.length ? "Adapter le plan avec Claude" : "Créer le plan avec Claude"}</button>` : ""}</div>
-    <p style="color:var(--muted);font-size:.9rem;margin:0 0 12px">Coche les étapes terminées : ta progression s'affiche sur le projet et Claude en tient compte pendant les séances.</p>
+      ${S.sample ? `<button class="btn ${plan.length ? "" : "primary"}" data-a="gen-plan" id="genplan">${plan.length ? "Adapter le plan avec le tuteur" : "Créer le plan avec le tuteur"}</button>` : ""}</div>
+    <p style="color:var(--muted);font-size:.9rem;margin:0 0 12px">Coche les étapes terminées : ta progression s'affiche sur le projet et ton tuteur en tient compte pendant les séances.</p>
     <div class="steps">${plan.length ? plan.map(s => `
       <div class="step ${s.fait ? "done" : ""}">
         <input type="checkbox" id="st-${esc(s.id)}" data-a="toggle-step" data-id="${esc(s.id)}" ${s.fait ? "checked" : ""}>
         <label class="t" for="st-${esc(s.id)}"><b>${esc(s.titre)}</b>${s.detail ? `<small>${esc(s.detail)}</small>` : ""}</label>
         <button class="x" data-a="del-step" data-id="${esc(s.id)}" aria-label="Supprimer l'étape">×</button>
-      </div>`).join("") : `<div class="notice">Pas encore de plan. Claude peut en proposer un en analysant tes supports et ton objectif, ou ajoute tes étapes toi-même.</div>`}</div>
+      </div>`).join("") : `<div class="notice">Pas encore de plan. Ton tuteur peut en proposer un en analysant tes supports et ton objectif, ou ajoute tes étapes toi-même.</div>`}</div>
     <form class="row" id="stepform" style="margin-top:12px">
       <label for="newstep" class="sr">Nouvelle étape</label>
       <input type="text" id="newstep" placeholder="Ajouter une étape…" maxlength="80" style="flex:1;min-width:180px">
@@ -1138,9 +1138,9 @@ async function genPlan(btn) {
   const pid = p.id;
   const faites = (p.plan || []).filter(s => s.fait);
   const adapter = (p.plan || []).length > 0;
-  btn.disabled = true; btn.textContent = adapter ? "Claude adapte ton plan…" : "Claude analyse tes supports…";
+  btn.disabled = true; btn.textContent = adapter ? "Le tuteur adapte ton plan…" : "Le tuteur analyse tes supports…";
   const zone = document.createElement("div"); zone.className = "notice"; zone.id = "plan-direct";
-  zone.innerHTML = `<p class="thinking">${adapter ? "Claude adapte ton plan…" : "Claude prépare ton plan…"}</p>`;
+  zone.innerHTML = `<p class="thinking">${adapter ? "Le tuteur adapte ton plan…" : "Le tuteur prépare ton plan…"}</p>`;
   const steps = $(".steps"); if (steps) steps.replaceWith(zone);
   const recents = S.thread.filter(t => t.role !== "event").slice(-6)
     .map(t => (t.role === "user" ? "Étudiant : " : "Tuteur : ") + String(t.content).slice(0, 800)).join("\n\n");
@@ -1160,12 +1160,12 @@ async function genPlan(btn) {
   ].filter(s => s !== null && s !== undefined).join("\n");
   const peindre = texte => {
     const vu = lirePlan(texte); const z = $("#plan-direct"); if (!z) return;
-    z.innerHTML = vu.length ? `<p class="thinking">Claude écrit le plan…</p><ol>${vu.map(e => `<li><b>${esc(e.titre)}</b>${e.detail ? ` — ${esc(e.detail)}` : ""}</li>`).join("")}</ol>` : z.innerHTML;
+    z.innerHTML = vu.length ? `<p class="thinking">Le tuteur écrit le plan…</p><ol>${vu.map(e => `<li><b>${esc(e.titre)}</b>${e.detail ? ` — ${esc(e.detail)}` : ""}</li>`).join("")}</ol>` : z.innerHTML;
   };
   try {
     const r = await S.sample(consigne, { modelTier: "default", tache: "plan", cache: false, onText: ({ text }) => peindre(text) });
     const nouvelles = lirePlan(r.text);
-    if (!nouvelles.length) throw { serveur: true, message: "Claude n'a pas proposé d'étapes lisibles. Réessaie dans un instant." };
+    if (!nouvelles.length) throw { serveur: true, message: "Le tuteur n'a pas proposé d'étapes lisibles. Réessaie dans un instant." };
     const dejaFait = new Set(faites.map(s => s.titre.toLowerCase()));
     const plan = [...faites, ...nouvelles.filter(e => !dejaFait.has(e.titre.toLowerCase())).map(e => ({ id: uid(), titre: e.titre, detail: e.detail, fait: false }))];
     if (S.current === pid) savePlan(plan);

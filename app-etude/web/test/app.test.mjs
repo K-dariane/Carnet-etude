@@ -71,7 +71,7 @@ after(async () => { await browser.close(); });
 test("création de compte : formulaire vérifié, e-mail d'activation, code, profil enregistré", async () => {
   await pg.goto("http://carnet.test/");
   await pg.waitForSelector("#f-connexion");
-  assert.match(await pg.textContent("#app"), /Pas besoin de compte Claude/);
+  assert.match(await pg.textContent("#app"), /Connecte-toi pour retrouver tes projets/);
   await pg.waitForSelector("#login-google");
   assert.equal(await pg.locator("#login-facebook, #login-apple").count(), 0, "Facebook caché tant qu'il n'est pas activé ; pas d'Apple");
   assert.equal(await pg.isVisible("#login-err"), false);
@@ -147,7 +147,7 @@ test("supports : PDF texte extrait et fichier dans Storage, note, compteur à jo
 
 test("plan : Claude analyse les supports et l'objectif, liste numérotée lue, plan affiché en direct", async () => {
   await pg.click("[data-tab=plan]");
-  assert.equal(await pg.textContent("#genplan"), "Créer le plan avec Claude");
+  assert.equal(await pg.textContent("#genplan"), "Créer le plan avec le tuteur");
   await pg.click("#genplan"); await pg.waitForSelector(".step");
   const a = appels.at(-1);
   assert.equal(a.body.tache, "plan"); assert.equal(a.body.tier, "default"); assert.equal(typeof a.body.prompt, "string");
@@ -165,7 +165,7 @@ test("plan : Claude analyse les supports et l'objectif, liste numérotée lue, p
 });
 
 test("plan adaptatif : les étapes faites sont gardées, Claude propose la suite", async () => {
-  assert.equal(await pg.textContent("#genplan"), "Adapter le plan avec Claude");
+  assert.equal(await pg.textContent("#genplan"), "Adapter le plan avec le tuteur");
   await pg.click("#genplan"); assert.equal(await pg.textContent("#genplan"), "Confirmer ?");
   await pg.click("#genplan");
   await attendre(() => window.__fake.tables.projets[0].plan.map(s => s.titre).join("|") === "Revoir les primitives|Exercices guidés|Sujet type");
@@ -243,7 +243,7 @@ test("quota atteint : message clair, rien d'ajouté à la conversation", async (
 });
 
 test("refus de Claude : texte partiel jeté, message affiché", async () => {
-  reponseChat = r => r.fulfill({ contentType: "application/x-ndjson", body: JSON.stringify({ type: "texte", delta: "Début" }) + "\n" + JSON.stringify({ type: "erreur", code: "refused", message: "Claude n'a pas pu répondre à cette demande. Reformule-la." }) + "\n" });
+  reponseChat = r => r.fulfill({ contentType: "application/x-ndjson", body: JSON.stringify({ type: "texte", delta: "Début" }) + "\n" + JSON.stringify({ type: "erreur", code: "refused", message: "Le tuteur n'a pas pu répondre à cette demande. Reformule-la." }) + "\n" });
   await pg.fill("#msg", "Question refusée"); await pg.click("#sendbtn");
   await attendre(() => /Reformule-la/.test(document.querySelector("#toast").textContent));
   await pg.waitForTimeout(300);
@@ -358,6 +358,19 @@ test("connexion par code (sans mot de passe) : toujours possible en secours", as
   assert.equal((await fake()).emails.at(-1).type, "magiclink");
   await pg.fill("#k-code", "123456"); await pg.click("#k-go");
   await pg.waitForSelector(".card");
+});
+
+test("le mot « Claude » n'apparaît nulle part à l'écran : on parle du tuteur", async () => {
+  await pg.goto("http://carnet.test/"); await pg.waitForSelector(".card, #f-connexion");
+  const textes = [];
+  const relever = async () => textes.push(await pg.evaluate(() => document.body.innerText + " " + [...document.querySelectorAll("[placeholder],[aria-label],[title]")].map(e => [e.placeholder, e.getAttribute("aria-label"), e.title].join(" ")).join(" ")));
+  await relever();
+  if (await pg.locator(".cards > .card").count()) {
+    await pg.click(".cards > .card"); await pg.waitForSelector("#msg"); await relever();
+    for (const t of ["plan", "supports"]) { await pg.click(`[data-tab=${t}]`); await pg.waitForTimeout(200); await relever(); }
+    await pg.click("[data-a=home]"); await pg.click("[data-a=compte]"); await pg.waitForSelector("#compte"); await relever(); await pg.click("#compte-fermer");
+  }
+  assert.doesNotMatch(textes.join(" "), /Claude/);
 });
 
 test("base injoignable : message clair, pas de mode local", async () => {

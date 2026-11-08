@@ -223,7 +223,7 @@ test("requêtes invalides : 400 ou 413, message en français", async () => {
 
 test("refus de Claude : erreur refused, consommation enregistrée", async () => {
   const l = await lignes(await handle(requete(conv("#refus")), deps()));
-  assert.deepEqual(l.at(-1), { type: "erreur", code: "refused", message: "Claude n'a pas pu répondre à cette demande. Reformule-la." });
+  assert.deepEqual(l.at(-1), { type: "erreur", code: "refused", message: "Le tuteur n'a pas pu répondre à cette demande. Reformule-la." });
   assert.equal(appels[0].statut, "refus"); assert.equal(appels[0].input_tokens, 1200);
 });
 
