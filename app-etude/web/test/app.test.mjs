@@ -52,7 +52,10 @@ async function contexte() {
     if ("code" in v) { refusees.push({ body, v }); return r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ erreur: { code: v.code, message: "La demande envoyée n'est pas valide. Recharge la page et réessaie.", raison: v.raison } }) }); }
     if (reponseChat) return reponseChat(r, body);
     // Avec les sorties structurées, Claude répond { "etapes": [...] } (format imposé par la fonction serveur).
-    if (body.tache === "plan") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson('{"etapes":[{"titre":"Revoir les primitives","detail":"Tableau"},{"titre":"Formule IPP","detail":"Choisir u et v\'"},{"titre":"Exercices","detail":"10 calculs"}]}') });
+    // Plan : Claude répond par une liste numérotée (ici avec introduction, gras et conclusion, comme en vrai).
+    if (body.tache === "plan") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson(/Un plan existe déjà/.test(body.prompt)
+      ? "1. Exercices guidés — 10 calculs avec correction\n2. Sujet type — 1 h chrono"
+      : "Voici ton plan :\n\n1. **Revoir les primitives** — Tableau des primitives usuelles\n2. Formule IPP — Choisir u et v'\n3. Exercices — 10 calculs\n\nBon courage !") });
     if (body.tache === "resume") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("- Notions vues : IPP\n- Difficulté : choix de u") });
     if (body.tache === "transcription") return r.fulfill({ contentType: "application/x-ndjson", body: ndjson("Théorème de Rolle : f(a) = f(b)") });
     r.fulfill({ contentType: "application/x-ndjson", body: ndjson(REPONSE) });
@@ -142,16 +145,47 @@ test("supports : PDF texte extrait et fichier dans Storage, note, compteur à jo
   assert.match(await pg.getAttribute(".sup a[href*='fake.supabase.test/storage']", "href"), /object\/sign\/supports\//, "lien « Ouvrir l'original » temporaire");
 });
 
-test("plan : généré par Claude via la fonction serveur, étape cochée", async () => {
-  await pg.click("[data-tab=plan]"); await pg.click("#genplan"); await pg.waitForSelector(".step");
+test("plan : Claude analyse les supports et l'objectif, liste numérotée lue, plan affiché en direct", async () => {
+  await pg.click("[data-tab=plan]");
+  assert.equal(await pg.textContent("#genplan"), "Créer le plan avec Claude");
+  await pg.click("#genplan"); await pg.waitForSelector(".step");
   const a = appels.at(-1);
   assert.equal(a.body.tache, "plan"); assert.equal(a.body.tier, "default"); assert.equal(typeof a.body.prompt, "string");
+  assert.equal(a.body.format, undefined, "plus de format JSON imposé");
   assert.ok(a.body.prompt.includes("Niveau de l'élève : secondaire."), "niveau aussi pour le plan");
-  assert.equal(a.body.format, "plan", "format de réponse demandé à la fonction serveur");
+  assert.ok(a.body.prompt.includes("Integration par parties") && a.body.prompt.includes("LIATE"), "supports analysés");
+  assert.ok(a.body.prompt.includes("Maîtriser l'intégration par parties"), "objectif");
+  assert.ok(a.body.prompt.includes("1. Titre court de l'étape — ce qu'il faut faire concrètement"));
   assert.equal(a.headers.authorization, "Bearer jeton-moi@test.cd"); assert.equal(a.headers.apikey, "cle-publique-test");
+  assert.deepEqual(await pg.$$eval(".step .t b", b => b.map(x => x.textContent)), ["Revoir les primitives", "Formule IPP", "Exercices"]);
+  assert.equal(await pg.textContent(".step .t small"), "Tableau des primitives usuelles");
   await pg.click(".step input[type=checkbox]");
   await attendre(() => window.__fake.tables.projets[0].plan.length === 3 && window.__fake.tables.projets[0].plan[0].fait === true);
   assert.deepEqual(Object.keys((await fake()).tables.projets[0].plan[0]).sort(), ["detail", "fait", "id", "titre"]);
+});
+
+test("plan adaptatif : les étapes faites sont gardées, Claude propose la suite", async () => {
+  assert.equal(await pg.textContent("#genplan"), "Adapter le plan avec Claude");
+  await pg.click("#genplan"); assert.equal(await pg.textContent("#genplan"), "Confirmer ?");
+  await pg.click("#genplan");
+  await attendre(() => window.__fake.tables.projets[0].plan.map(s => s.titre).join("|") === "Revoir les primitives|Exercices guidés|Sujet type");
+  const a = appels.at(-1);
+  assert.ok(a.body.prompt.includes("Un plan existe déjà") && a.body.prompt.includes("[fait] Revoir les primitives"));
+  const plan = (await fake()).tables.projets[0].plan;
+  assert.deepEqual(plan.map(s => s.fait), [true, false, false]);
+  assert.equal(await pg.locator(".step").count(), 3);
+});
+
+test("plan : réponse sans étape lisible ou erreur du serveur → message clair, ancien plan intact", async () => {
+  reponseChat = (r, body) => body.tache === "plan" ? r.fulfill({ contentType: "application/x-ndjson", body: ndjson("Je ne peux pas faire de plan sans plus d'informations.") }) : null;
+  await pg.click("#genplan"); await pg.click("#genplan");
+  await attendre(() => /pas proposé d'étapes lisibles/.test(document.querySelector("#toast").textContent));
+  assert.equal(await pg.locator(".step").count(), 3);
+  reponseChat = (r, body) => r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ erreur: { code: "requete_invalide", message: "La demande envoyée n'est pas valide.", raison: "x" } }) });
+  await pg.click("#genplan"); await pg.click("#genplan");
+  await attendre(() => /n'est pas valide/.test(document.querySelector("#toast").textContent));
+  assert.equal((await fake()).tables.projets[0].plan.length, 3);
+  reponseChat = null;
 });
 
 test("plan : réponse de Claude lue quelle que soit sa forme", async () => {

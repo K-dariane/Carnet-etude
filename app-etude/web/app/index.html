@@ -1094,14 +1094,14 @@ function renderPlan() {
   const p = proj(); const plan = Array.isArray(p.plan) ? p.plan : [];
   $("#tab").innerHTML = `
     <div class="section-head"><h2>Plan de travail</h2>
-      ${S.sample ? `<button class="btn ${plan.length ? "" : "primary"}" data-a="gen-plan" id="genplan">${plan.length ? "Refaire avec Claude" : "Créer le plan avec Claude"}</button>` : ""}</div>
+      ${S.sample ? `<button class="btn ${plan.length ? "" : "primary"}" data-a="gen-plan" id="genplan">${plan.length ? "Adapter le plan avec Claude" : "Créer le plan avec Claude"}</button>` : ""}</div>
     <p style="color:var(--muted);font-size:.9rem;margin:0 0 12px">Coche les étapes terminées : ta progression s'affiche sur le projet et Claude en tient compte pendant les séances.</p>
     <div class="steps">${plan.length ? plan.map(s => `
       <div class="step ${s.fait ? "done" : ""}">
         <input type="checkbox" id="st-${esc(s.id)}" data-a="toggle-step" data-id="${esc(s.id)}" ${s.fait ? "checked" : ""}>
         <label class="t" for="st-${esc(s.id)}"><b>${esc(s.titre)}</b>${s.detail ? `<small>${esc(s.detail)}</small>` : ""}</label>
         <button class="x" data-a="del-step" data-id="${esc(s.id)}" aria-label="Supprimer l'étape">×</button>
-      </div>`).join("") : `<div class="notice">Pas encore de plan. Claude peut en proposer un à partir de ton objectif et de tes supports, ou ajoute tes étapes toi-même.</div>`}</div>
+      </div>`).join("") : `<div class="notice">Pas encore de plan. Claude peut en proposer un en analysant tes supports et ton objectif, ou ajoute tes étapes toi-même.</div>`}</div>
     <form class="row" id="stepform" style="margin-top:12px">
       <label for="newstep" class="sr">Nouvelle étape</label>
       <input type="text" id="newstep" placeholder="Ajouter une étape…" maxlength="80" style="flex:1;min-width:180px">
@@ -1118,22 +1118,63 @@ function savePlan(plan) {
   write(projRef(id), () => projRef(id).update({ plan, updatedAt: Date.now() }));
   renderPlan(); renderPHead();
 }
+/* Plan proposé par Claude (version web) : Claude analyse les supports actifs, l'objectif, le niveau et l'échéance,
+   et répond par une simple liste numérotée « 1. Titre — détail », lue ligne par ligne (pas de JSON).
+   Plan adaptatif : les étapes cochées sont gardées, Claude propose la suite selon ce qui reste et les séances récentes. */
+function lirePlan(texte) {
+  const etapes = [];
+  for (const brut of String(texte || "").split("\n")) {
+    const m = brut.match(/^\s*(?:#{1,6}\s*)?(?:(?:étape\s*)?\d{1,2}\s*[.):-]|[-*•])\s+(.+?)\s*$/i);
+    if (!m) continue;
+    const ligne = m[1].replace(/\*\*|__|`/g, "").trim();
+    const coupe = ligne.match(/^(.+?)\s+[—–-]\s+(.+)$/) || ligne.match(/^(.{3,80}?)\s*:\s+(.+)$/);
+    const titre = (coupe ? coupe[1] : ligne).trim().replace(/[.:]$/, "");
+    if (titre) etapes.push({ titre: titre.slice(0, 80), detail: (coupe ? coupe[2] : "").trim().slice(0, 200) });
+  }
+  return etapes.slice(0, 12);
+}
 async function genPlan(btn) {
   const p = proj(); if (!S.sample) return;
-  btn.disabled = true; btn.textContent = "Claude prépare le plan…";
+  const pid = p.id;
+  const faites = (p.plan || []).filter(s => s.fait);
+  const adapter = (p.plan || []).length > 0;
+  btn.disabled = true; btn.textContent = adapter ? "Claude adapte ton plan…" : "Claude analyse tes supports…";
+  const zone = document.createElement("div"); zone.className = "notice"; zone.id = "plan-direct";
+  zone.innerHTML = `<p class="thinking">${adapter ? "Claude adapte ton plan…" : "Claude prépare ton plan…"}</p>`;
+  const steps = $(".steps"); if (steps) steps.replaceWith(zone);
+  const recents = S.thread.filter(t => t.role !== "event").slice(-6)
+    .map(t => (t.role === "user" ? "Étudiant : " : "Tuteur : ") + String(t.content).slice(0, 800)).join("\n\n");
+  const consigne = [
+    RULES.split("\n")[0] + consigneNiveau(),
+    "", projectContext(p, 40000),
+    recents ? "\n# Échanges récents de la séance\n" + recents : "",
+    "", "---",
+    "Prépare le plan de travail de l'étudiant pour atteindre l'objectif de ce projet. Analyse ses supports de cours (s'il y en a), son objectif, son niveau" + (p.echeance ? " et le temps qui reste avant l'échéance" : "") + ".",
+    adapter
+      ? "Un plan existe déjà. Les étapes marquées [fait] sont terminées : ne les répète pas. Propose les étapes suivantes, adaptées à ce qui reste à travailler et aux difficultés vues en séance."
+      : "Commence par les bases nécessaires, puis progresse vers ce qui est demandé à l'examen ou dans l'objectif.",
+    "Propose entre 4 et 10 étapes concrètes, dans l'ordre où il faut les faire.",
+    "Réponds UNIQUEMENT avec la liste, une étape par ligne, exactement au format :",
+    "1. Titre court de l'étape — ce qu'il faut faire concrètement",
+    "Titre : 60 caractères au plus. Détail : 150 caractères au plus. Pas d'introduction, pas de conclusion, pas de JSON."
+  ].filter(s => s !== null && s !== undefined).join("\n");
+  const peindre = texte => {
+    const vu = lirePlan(texte); const z = $("#plan-direct"); if (!z) return;
+    z.innerHTML = vu.length ? `<p class="thinking">Claude écrit le plan…</p><ol>${vu.map(e => `<li><b>${esc(e.titre)}</b>${e.detail ? ` — ${esc(e.detail)}` : ""}</li>`).join("")}</ol>` : z.innerHTML;
+  };
   try {
-    const out = await S.sample.json(
-      RULES.split("\n")[0] + consigneNiveau() + "\n\n" + projectContext(p, 40000) +
-      "\n\n---\nPropose un plan de travail réaliste en 4 à 10 étapes concrètes et ordonnées pour atteindre l'objectif de ce projet" +
-      (p.echeance ? ", en tenant compte de l'échéance" : "") + ", en t'appuyant sur les supports. " +
-      'Réponds uniquement avec un tableau JSON d\'objets {"titre": string (60 caractères max), "detail": string (150 caractères max)}. ' +
-      'Exemple : [{"titre":"Revoir les primitives usuelles","detail":"Tableau des primitives + 10 calculs rapides"}]',
-      { modelTier: "default", cache: false });
-    if (!Array.isArray(out) || !out.length) throw { code: "invalid_json" };
-    const old = new Map((p.plan || []).filter(s => s.fait).map(s => [s.titre.toLowerCase(), true]));
-    savePlan(out.slice(0, 12).map(s => ({ id: uid(), titre: String(s.titre || "").slice(0, 80), detail: String(s.detail || "").slice(0, 200), fait: !!old.get(String(s.titre || "").toLowerCase()) })).filter(s => s.titre));
-    toast("Plan créé. Coche les étapes au fur et à mesure.");
-  } catch (e) { toast(errMsg(e), 6000); renderPlan(); }
+    const r = await S.sample(consigne, { modelTier: "default", tache: "plan", cache: false, onText: ({ text }) => peindre(text) });
+    const nouvelles = lirePlan(r.text);
+    if (!nouvelles.length) throw { serveur: true, message: "Claude n'a pas proposé d'étapes lisibles. Réessaie dans un instant." };
+    const dejaFait = new Set(faites.map(s => s.titre.toLowerCase()));
+    const plan = [...faites, ...nouvelles.filter(e => !dejaFait.has(e.titre.toLowerCase())).map(e => ({ id: uid(), titre: e.titre, detail: e.detail, fait: false }))];
+    if (S.current === pid) savePlan(plan);
+    else write(projRef(pid), () => projRef(pid).update({ plan, updatedAt: Date.now() }));
+    toast(adapter ? "Plan adapté. Les étapes déjà faites sont gardées." : "Plan créé. Coche les étapes au fur et à mesure.");
+  } catch (e) {
+    toast(errMsg(e), 8000);
+    if (S.current === pid && S.tab === "plan") renderPlan();
+  }
 }
 
 /* ---------- Actions ---------- */
