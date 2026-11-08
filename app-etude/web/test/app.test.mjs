@@ -30,6 +30,7 @@ async function nouvellePage(context) {
 async function contexte() {
   const c = await browser.newContext({ viewport: { width: 400, height: 860 } });
   await c.addInitScript({ path: join(here, "fake_supabase.js") });
+  await c.addInitScript({ path: join(here, "fake_voix.js") });
   await c.route(/fonts\.(googleapis|gstatic)/, r => r.abort());
   await c.route(/cdn\.jsdelivr\.net\/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/, r => {
     const m = r.request().url().match(/npm\/((?:@[^/]+\/)?[^@/]+)@[^/]+\/(.+)$/);
@@ -387,6 +388,51 @@ test("connexion par code (sans mot de passe) : toujours possible en secours", as
   assert.equal((await fake()).emails.at(-1).type, "magiclink");
   await pg.fill("#k-code", "123456"); await pg.click("#k-go");
   await pg.waitForSelector(".card");
+});
+
+test("voix : formules et mise en forme traduites en paroles", async () => {
+  const p = t => pg.evaluate(x => window.carnetVoix.paroles(x), t);
+  assert.equal(await p("\\( \\frac{a+1}{b} \\)"), "a plus 1 sur b");
+  assert.equal(await p("\\( x^2 + x^3 - x^{n} \\)"), "x au carré plus x au cube moins x puissance n");
+  assert.equal(await p("\\( \\sqrt{x} \\) et \\( \\sqrt[3]{8} \\)"), "racine carrée de x et racine cubique de 8");
+  assert.equal(await p("\\( \\int_0^1 f(x)\\,dx \\)"), "intégrale de 0 à 1 de f de x dx");
+  assert.equal(await p("\\( \\lim_{x \\to 0} \\frac{\\sin x}{x} = 1 \\)"), "limite quand x tend vers 0 de sinus x sur x égal 1");
+  assert.equal(await p("Si \\( x \\leq 2 \\) alors \\( f'(x) \\geq 0 \\)"), "Si x inférieur ou égal à 2 alors f prime de x supérieur ou égal à 0");
+  assert.equal(await p("**Résultat** : $e^{-x}$ 😀"), "Résultat : e puissance moins x");
+  assert.equal(await p("### Titre\n- Soit 𝑥 ∈ ℝ, π ≈ 3,14"), "Titre\nSoit x appartient à R , pi environ égal à 3,14");
+  assert.equal(await p("Voici :\n```svg\n<svg></svg>\n```\n| a | b |\n|---|---|\nFin."), "Voici :\n(schéma affiché à l'écran).\n(tableau affiché à l'écran).\nFin.");
+});
+
+test("voix : dictée de la question au micro, puis écoute d'une réponse", async () => {
+  await pg.click(".cards > .card"); await pg.waitForSelector("#micbtn");
+  await pg.click("#micbtn");
+  await attendre(() => document.querySelector("#msg").value === "Explique la dérivée" && !document.querySelector("#micbtn").classList.contains("ecoute"));
+  assert.equal(appels.filter(a => a.body.tache === "seance").length > 0, true);
+  const avant = appels.length;
+  await pg.waitForTimeout(200); assert.equal(appels.length, avant, "hors mode oral, la dictée n'envoie pas toute seule");
+  await pg.fill("#msg", "");
+  await pg.click(".msg.assistant .lire");
+  await attendre(() => window.__lu.length > 0 && !window.speechSynthesis.speaking && window.__lu.join(" ").includes("plus C"));
+  const lu = (await pg.evaluate(() => window.__lu)).join(" ");
+  assert.match(lu, /intégrale/); assert.doesNotMatch(lu, /\\\[|\\int|###|\*\*/, "pas de LaTeX ni de Markdown lus tels quels");
+});
+
+test("voix : mode oral, la question part seule, la réponse est lue, puis le micro se rouvre", async () => {
+  await pg.evaluate(() => { window.__lu = []; window.__dictees = 0; window.__phraseDictee = "Interroge-moi sur les intégrales"; });
+  const avant = appels.length;
+  await pg.check("#oral");
+  await attendre(() => window.__dictees >= 2 && window.__lu.length > 0, 15000);
+  const a = appels[avant];
+  assert.equal(a.body.messages.at(-1).content, "Interroge-moi sur les intégrales");
+  assert.ok(a.body.messages[0].content.includes("Mode oral : l'élève t'écoute au lieu de lire. Réponds en 2 à 4 phrases courtes"), "consigne orale envoyée");
+  await pg.uncheck("#oral");
+  await pg.waitForTimeout(300);
+  const n = appels.length;
+  await pg.fill("#msg", "Question écrite"); await pg.click("#sendbtn");
+  for (let i = 0; i < 80 && appels.length <= n; i++) await pg.waitForTimeout(100);
+  assert.ok(appels.length > n, "la question écrite est partie");
+  await attendre(() => !document.querySelector("[data-a=stop]"));
+  assert.ok(!appels.at(-1).body.messages[0].content.includes("Mode oral"), "plus de consigne orale une fois le mode coupé");
 });
 
 test("le mot « Claude » n'apparaît nulle part à l'écran : on parle du tuteur", async () => {

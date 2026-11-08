@@ -104,6 +104,11 @@ button.card:hover { border-color: var(--accent); }
 .field label, .field .lbl { font-weight: 700; font-size: .95rem; }
 .field .hint { color: var(--muted); font-size: .85rem; margin: 0; }
 [hidden] { display: none !important; }  /* version web : l'attribut hidden l'emporte sur display (écran de connexion) */
+/* Version web : la voix (dictée, lecture, mode oral) */
+.who .lire { border: 0; background: none; cursor: pointer; font-size: 1rem; padding: 0 4px; line-height: 1; }
+#micbtn.ecoute { background: var(--danger); color: #fff; border-color: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .65; } }
+@media (prefers-reduced-motion: reduce) { #micbtn.ecoute { animation: none; } }
 input[type=text], input[type=email], input[type=date], textarea {
   width: 100%; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 10px 12px; }
 textarea { resize: vertical; min-height: 80px; }
@@ -231,6 +236,7 @@ window.MathJax = {
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="backend.js"></script>
+<script src="voix.js"></script>
 </head>
 <body>
 <header class="top"><div class="wrap" id="top"></div></header>
@@ -274,6 +280,10 @@ const NIVEAUX_IA = {
   secondaire: "Niveau de l'élève : secondaire. Langage clair et accessible : notions expliquées pas à pas avec des exemples, vocabulaire du programme expliqué.",
   universitaire: "Niveau de l'étudiant : universitaire."
 };
+/* Version web : consigne du mode oral (validée le 2026-11-08), ajoutée seulement quand le mode oral est actif. */
+const CONSIGNE_ORALE = "Mode oral : l'élève t'écoute au lieu de lire. Réponds en 2 à 4 phrases courtes, sans formule LaTeX, sans schéma ni tableau ; dis les formules en mots (ex. « x au carré »). Termine par une seule question.";
+const consigneOrale = () => S.oral ? "\n\n" + CONSIGNE_ORALE : "";
+const voix = () => window.carnetVoix || null;
 const consigneNiveau = () => { const n = window.carnetWeb && carnetWeb.niveau && carnetWeb.niveau(); return NIVEAUX_IA[n] ? "\n\n" + NIVEAUX_IA[n] : ""; };
 const RULES_CHAT = RULES
   .replace(/^Tu es le tuteur[^\n]*/, "Tu es le tuteur personnel d'un étudiant universitaire. Il a préparé cette demande avec son « Carnet d'étude ». Réponds toujours en français.")
@@ -606,7 +616,25 @@ function openProject(id, tab) {
   window.scrollTo(0, 0);
 }
 function closeSubs() { S.unsubs.forEach(u => { try { u(); } catch {} }); S.unsubs = []; }
-function closeProject() { if (S.ctl) S.ctl.abort(); closeSubs(); S.current = null; S.view = "home"; render(); }
+/* Dictée de la question (micro). En mode oral, la question part toute seule à la fin de la dictée. */
+function micEtat(actif) {
+  const b = $("#micbtn"); if (!b) return;
+  b.classList.toggle("ecoute", actif); b.setAttribute("aria-pressed", String(actif));
+  b.setAttribute("aria-label", actif ? "Arrêter la dictée" : "Dicter ta question");
+}
+function dicterQuestion(envoyerSeul) {
+  const V = voix(); if (!V) return;
+  if (V.enDictee()) { V.arreterDictee(); micEtat(false); return; }
+  const ta = $("#msg"); if (!ta) return;
+  const avant = ta.value.trim();
+  micEtat(true);
+  V.dicter({
+    surTexte: t => { const z = $("#msg"); if (z) { z.value = (avant ? avant + " " : "") + t; autosize(); } },
+    surFin: (t, erreur) => { micEtat(false); if (envoyerSeul && S.oral && t && !erreur && !S.busy) send(); },
+    surErreur: m => { micEtat(false); toast(m, 6000); },
+  });
+}
+function closeProject() { if (voix()) { voix().arreter(); voix().arreterDictee(); } if (S.ctl) S.ctl.abort(); closeSubs(); S.current = null; S.view = "home"; render(); }
 
 function renderProjet() {
   const p = proj(); if (!p) return closeProject();
@@ -784,10 +812,11 @@ function renderSeance() {
         ${canImg ? `<label class="btn iconbtn" title="Joindre une photo" for="chatimg"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="sr">Joindre une photo</span></label><input type="file" id="chatimg" accept="image/*" hidden>` : ""}
         <label for="msg" class="sr">Ton message</label>
         <textarea id="msg" rows="1" placeholder="${canAsk ? "Pose ta question…" : "Ta question pour Claude…"}"></textarea>
+        ${canAsk && voix() && voix().peutDicter() ? `<button class="btn iconbtn" type="button" id="micbtn" data-a="mic" aria-pressed="false" aria-label="Dicter ta question"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>` : ""}
         <button class="btn primary iconbtn" id="sendbtn" data-a="send" aria-label="${canAsk ? "Envoyer" : "Préparer pour Claude"}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>
       </div>
       <div class="toggles">
-        ${canAsk ? `<label for="deep"><input type="checkbox" id="deep" ${S.deep ? "checked" : ""}> Mode approfondi</label>` : "<span></span>"}
+        ${canAsk ? `<span class="row" style="gap:12px"><label for="deep"><input type="checkbox" id="deep" ${S.deep ? "checked" : ""}> Mode approfondi</label>${voix() && voix().peutLire() ? `<label for="oral"><input type="checkbox" id="oral" ${S.oral ? "checked" : ""}> Mode oral</label>` : ""}</span>` : "<span></span>"}
         <button class="btn ghost" data-a="clear-thread" style="min-height:32px;padding:4px 10px;font-size:.82rem;white-space:nowrap">Effacer la conversation</button>
       </div>
     </div>`;
@@ -795,6 +824,14 @@ function renderSeance() {
   ta.addEventListener("input", autosize);
   ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && window.matchMedia("(pointer:fine)").matches) { e.preventDefault(); send(); } });
   if ($("#deep")) $("#deep").addEventListener("change", e => { S.deep = e.target.checked; });
+  if ($("#oral")) $("#oral").addEventListener("change", e => {
+    S.oral = e.target.checked; const V = voix();
+    if (S.oral) {
+      V.debloquer();
+      toast(V.peutDicter() ? "Mode oral : parle quand le micro est rouge. Le tuteur te répond à voix haute." : "Mode oral : le tuteur te répond à voix haute (la dictée n'est pas disponible dans ce navigateur).", 6000);
+      if (V.peutDicter() && !S.busy) dicterQuestion(true);
+    } else { V.arreter(); V.arreterDictee(); micEtat(false); }
+  });
   const ci = $("#chatimg");
   if (ci) ci.addEventListener("change", async e => {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
@@ -823,7 +860,7 @@ function msgNode(turn) {
   } else if (turn.role === "user") {
     d.innerHTML = `<div class="bubble">${turn.img ? `<img class="thumb" src="${esc(turn.img)}" alt="Photo envoyée">` : turn.hadImg ? `<em>[photo jointe]</em>\n` : ""}${esc(turn.content)}</div>`;
   } else {
-    d.innerHTML = `<span class="who">Tuteur</span><div class="bubble md">${renderMd(turn.content)}</div>`;
+    d.innerHTML = `<span class="who">Tuteur${voix() && voix().peutLire() ? ` <button class="lire" type="button" data-a="lire" data-ts="${esc(turn.ts)}" aria-label="Écouter la réponse" title="Écouter la réponse">🔊</button>` : ""}</span><div class="bubble md">${renderMd(turn.content)}</div>`;
     d.dataset.tx = "0";
   }
   msgCache.set(key, d);
@@ -857,6 +894,7 @@ function storeTurns(turns) {
 async function send() {
   if (!S.sample) return copyFlow();
   if (S.busy) return;
+  if (voix()) { voix().arreter(); if (voix().enDictee()) { voix().arreterDictee(); micEtat(false); } }
   const ta = $("#msg"); const text = ta.value.trim();
   if (!text && !S.pendingImg) return;
   const p = proj(); const pid = p.id; const t = TYPES[p.type] || TYPES.autre;
@@ -876,7 +914,7 @@ async function send() {
   write(ref, () => ref.set({ turns: storeTurns(thread) }));
 
   // Construction de la requête
-  const head = RULES + consigneNiveau() + "\n\n" + t.mode + "\n\n" + projectContext(p);
+  const head = RULES + consigneNiveau() + consigneOrale() + "\n\n" + t.mode + "\n\n" + projectContext(p);
   let room = INPUT_BUDGET - bytes(head) - 2000;
   const convo = [];
   for (let i = thread.length - 1; i >= 0; i--) {
@@ -913,6 +951,9 @@ async function send() {
   S.streamEl = null; S.ctl = null;
   if (img && img.url && userTurn.img) URL.revokeObjectURL(img.url);
   if (answer) thread.push({ role: "assistant", content: answer + note, ts: Date.now() });
+  if (answer && S.oral && voix() && S.current === pid) {
+    voix().lire(answer, { surFin: () => { if (S.oral && S.current === pid && !S.busy && voix().peutDicter()) dicterQuestion(true); } });
+  }
   setBusy(false);
   if (S.current === pid) { renderThread(); }
   write(ref, () => ref.set({ turns: storeTurns(thread) }));
@@ -1184,6 +1225,13 @@ document.addEventListener("click", async ev => {
   if (a === "toggle-sup" || a === "toggle-step") return; // gérés par "change"
   switch (a) {
     case "compte": window.carnetWeb.compte(); break;
+    case "mic": dicterQuestion(false); break;
+    case "lire": {
+      const V = voix(); if (!V) break;
+      if (V.enLecture()) { V.arreter(); break; }
+      const t = S.thread.find(x => String(x.ts) === b.dataset.ts); if (t) V.lire(t.content);
+      break;
+    }
     case "home": if (S.view === "form" && S.editId) { S.view = "projet"; S.editId = null; render(); } else closeProject(); break;
     case "back-projet": S.view = "projet"; S.editId = null; render(); break;
     case "new": closeSubs(); S.view = "form"; S.editId = null; S.current = null; render(); break;
