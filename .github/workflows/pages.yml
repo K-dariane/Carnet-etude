@@ -28,6 +28,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Le navigateur garde config.js et backend.js en mémoire jusqu'à 10 minutes : on ajoute la version
+      # (?v=<commit>) pour qu'il charge toujours celle qui vient d'être mise en ligne.
+      - name: Version des fichiers
+        run: |
+          V="${GITHUB_SHA::8}"
+          sed -i "s#src=\"config.js\"#src=\"config.js?v=$V\"#; s#src=\"backend.js\"#src=\"backend.js?v=$V\"#" app-etude/web/app/index.html
+          grep -c "?v=$V" app-etude/web/app/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app-etude/web/app

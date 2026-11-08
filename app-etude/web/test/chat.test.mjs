@@ -41,6 +41,8 @@ before(async () => {
       const last = body.messages.at(-1); const txt = typeof last.content === "string" ? last.content : last.content.at(-1).text;
       if (txt.includes("#429")) { res.writeHead(429, { "content-type": "application/json" }); return res.end(JSON.stringify({ type: "error", error: { type: "rate_limit_error", message: "x" } })); }
       if (txt.includes("#529")) { res.writeHead(529, { "content-type": "application/json" }); return res.end(JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "x" } })); }
+      if (txt.includes("#format400") && body.output_config && body.output_config.format) { res.writeHead(400, { "content-type": "application/json" }); return res.end(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "output_config.format: schema not supported" } })); }
+      if (txt.includes("#400")) { res.writeHead(400, { "content-type": "application/json" }); return res.end(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "messages: bad thing" } })); }
       if (txt.includes("#refus")) return sse(res, evenements([], { stop: "refusal", sortie: 0 }));
       if (txt.includes("#vide")) return sse(res, evenements([], { sortie: 3 }));
       if (txt.includes("#coupe")) return sse(res, evenements(["Début de la réponse"], { stop: "max_tokens", sortie: 16000 }));
@@ -178,6 +180,22 @@ test("plan : format imposé à Claude (sorties structurées) ; format inconnu re
   assert.equal(requetes[0].body.output_config.format, undefined, "pas de format imposé pour une séance");
   const res = await handle(requete({ prompt: "x", format: "roman" }), deps());
   assert.equal(res.status, 400); assert.match((await res.json()).erreur.raison, /format de réponse « roman » inconnu/);
+});
+
+test("format refusé par l'API : nouvel essai sans format, le plan arrive quand même", async () => {
+  const journal = [];
+  const l = await lignes(await handle(requete({ prompt: "Plan #format400", tache: "plan", format: "plan" }), deps({ log: (...a) => journal.push(a.join(" ")) })));
+  assert.equal(l.at(-1).type, "fin");
+  assert.equal(requetes.length, 2);
+  assert.ok(requetes[0].body.output_config.format); assert.equal(requetes[1].body.output_config.format, undefined);
+  assert.equal(requetes[1].body.output_config.effort, "medium");
+  assert.ok(journal.some(x => /format refusé.*schema not supported/.test(x)));
+});
+
+test("autre refus de l'API (400) : erreur avec le détail de l'API", async () => {
+  const l = await lignes(await handle(requete(conv("#400")), deps({ log: () => {} })));
+  assert.equal(l.at(-1).code, "requete_invalide"); assert.equal(l.at(-1).detail, "messages: bad thing");
+  assert.equal(requetes.length, 1, "pas de nouvel essai sans format imposé");
 });
 
 test("requêtes invalides : 400 ou 413, message en français", async () => {

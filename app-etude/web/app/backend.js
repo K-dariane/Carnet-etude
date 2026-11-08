@@ -676,7 +676,7 @@
       if (opts.signal && opts.signal.aborted) throw { code: "cancelled", text: texte };
       throw { code: "reseau", message: MSG.reseau, serveur: true, text: texte };
     }
-    if (erreur) throw { code: erreur.code, message: erreur.message, serveur: true, text: erreur.code === "refused" ? undefined : (texte || undefined) };
+    if (erreur) throw { code: erreur.code, message: erreur.message + (erreur.detail ? ` (détail : ${erreur.detail})` : ""), serveur: true, text: erreur.code === "refused" ? undefined : (texte || undefined) };
     if (!fin) throw { code: "reseau", message: MSG.reseau, serveur: true, text: texte || undefined };
     dernierQuota = fin.quota || dernierQuota;
     if (dernierQuota && dernierQuota.limite && dernierQuota.utilise / dernierQuota.limite >= 0.8 && typeof window.toast === "function" && !sample._prevenu) {

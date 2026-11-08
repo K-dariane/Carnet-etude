@@ -163,6 +163,12 @@ export function parametres(messages: Anthropic.Beta.BetaMessageParam[], tier: "d
   return p;
 }
 
+// Message d'erreur de l'API Claude (sans secret), pour le diagnostic.
+function detailApi(e: unknown): string {
+  const err = e as { error?: { error?: { message?: string } }; message?: string };
+  return String(err?.error?.error?.message || err?.message || "").slice(0, 300);
+}
+
 function codeApi(e: unknown, deps: Deps): string {
   if (e instanceof deps.sdk.RateLimitError) return "rate_limited";
   if (e instanceof deps.sdk.APIError) {
@@ -221,14 +227,26 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     async start(c) {
       const envoyer = (o: unknown) => { if (!ferme) { try { c.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { ferme = true; } } };
       let statut: Appel["statut"] = "erreur"; let texte = ""; let modele: string = params.model;
-      try {
-        const stream = deps.anthropic.beta.messages.stream(params, { signal: ctl.signal });
+      const lancer = async (p: typeof params) => {
+        const stream = deps.anthropic.beta.messages.stream(p, { signal: ctl.signal });
         for await (const ev of stream) {
           if (ev.type === "message_start") { majUsage(ev.message.usage as never); if (ev.message.model) modele = ev.message.model; }
           else if (ev.type === "message_delta") majUsage(ev.usage as never);
           else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") { texte += ev.delta.text; envoyer({ type: "texte", delta: ev.delta.text }); }
         }
-        const fin = await stream.finalMessage();
+        return stream.finalMessage();
+      };
+      try {
+        let fin;
+        try { fin = await lancer(params); }
+        catch (e) {
+          // Format de réponse refusé par l'API (400 avant tout texte) : on relance sans format imposé ;
+          // l'app sait lire la réponse libre.
+          if (!(e instanceof deps.sdk.APIError && e.status === 400 && params.output_config?.format && !texte)) throw e;
+          deps.log?.("format refusé par l'API, nouvel essai sans format :", detailApi(e));
+          const { format: _f, ...oc } = params.output_config!;
+          fin = await lancer({ ...params, output_config: oc });
+        }
         majUsage(fin.usage as never); if (fin.model) modele = fin.model;
         if (fin.stop_reason === "refusal") { statut = "refus"; envoyer({ type: "erreur", code: "refused", message: MESSAGES_ERREUR.refused }); }
         else if (!texte.trim()) { statut = "ok"; envoyer({ type: "erreur", code: "empty_completion", message: MESSAGES_ERREUR.empty_completion }); }
@@ -239,7 +257,10 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
         }
       } catch (e) {
         if (ctl.signal.aborted || e instanceof deps.sdk.APIUserAbortError) statut = "interrompu";
-        else { deps.log?.("claude", e); const code = codeApi(e, deps); envoyer({ type: "erreur", code, message: MESSAGES_ERREUR[code] }); }
+        else {
+          deps.log?.("claude", e); const code = codeApi(e, deps); const detail = detailApi(e);
+          envoyer({ type: "erreur", code, message: MESSAGES_ERREUR[code], ...(detail && code !== "rate_limited" ? { detail } : {}) });
+        }
       } finally {
         if (total() > 0 || statut !== "erreur") {
           await deps.enregistrer({ owner: user.id, tache: prep.tache, modele, statut, ...usage }).catch(e => deps.log?.("enregistrer", e));
