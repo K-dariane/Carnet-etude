@@ -31,7 +31,9 @@
     const p = new URLSearchParams(location.hash.slice(1)); const q = new URLSearchParams(location.search);
     const code = p.get("error_code") || q.get("error_code") || p.get("error") || q.get("error");
     if (!code) return null;
-    return { code, description: (p.get("error_description") || q.get("error_description") || "").replace(/\+/g, " ") };
+    let description = (p.get("error_description") || q.get("error_description") || "").replace(/\+/g, " ");
+    try { description = decodeURIComponent(description); } catch { /* déjà lisible */ }
+    return { code, description };
   })();
   const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" }
@@ -357,7 +359,10 @@
 
   /* ---------- Mon compte ---------- */
   function monCompte() {
-    if (!session || !profil) return;
+    if (!session) return;
+    // Profil indisponible (table pas encore créée dans Supabase, ou réseau) : on garde au moins l'e-mail et la déconnexion.
+    const sansProfil = !profil;
+    if (sansProfil) profil = { prenom: (session.user.user_metadata || {}).prenom || "", ...(session.user.user_metadata || {}) };
     let fond = $("#compte");
     if (fond) fond.remove();
     fond = document.createElement("div"); fond.id = "compte"; fond.className = "compte-fond";
@@ -365,7 +370,8 @@
     fond.innerHTML = `<div class="compte" role="dialog" aria-modal="true" aria-labelledby="compte-titre">
       <div class="row" style="justify-content:space-between"><h2 id="compte-titre">Mon compte</h2><button class="btn ghost" type="button" id="compte-fermer" aria-label="Fermer">✕</button></div>
       <p class="hint">${esc(session.user.email || "")}${fourn.filter(f => f !== "email").length ? ` · connecté aussi avec ${fourn.filter(f => f !== "email").map(f => FOURNISSEURS[f] || f).join(", ")}` : ""}</p>
-      <form id="f-compte" class="grille" novalidate>
+      ${sansProfil ? `<p class="notice">Ton profil n'est pas disponible pour le moment. Tu peux quand même te déconnecter ou changer ton mot de passe.</p>` : ""}
+      <form id="f-compte" class="grille" novalidate ${sansProfil ? "hidden" : ""}>
         <div class="field"><label for="m-prenom">Prénom</label><input type="text" id="m-prenom" maxlength="80" value="${esc(profil.prenom || "")}"></div>
         ${champNiveau("m", profil)}
         <button class="btn primary" type="submit" id="m-go">Enregistrer</button>
@@ -382,6 +388,7 @@
         <a class="hint" href="confidentialite.html">Confidentialité, supprimer mon compte</a></div>
     </div>`;
     document.body.appendChild(fond);
+    if (sansProfil) profil = null;
     const err = (m, ok) => { const e = $("#compte-err"); e.textContent = m; e.hidden = !m; e.style.color = ok ? "var(--ok)" : ""; };
     const fermer = () => fond.remove();
     brancherVoir(fond); brancherNiveau("m");
