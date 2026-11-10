@@ -415,7 +415,7 @@
       if (error) return err(traduire(error));
       $("#m-mdp").value = $("#m-mdp2").value = ""; err("Mot de passe enregistré.", true);
     }); };
-    setTimeout(() => $("#m-prenom").focus(), 50);
+    setTimeout(() => { const champ = $("#m-prenom"); if (champ && !champ.closest("[hidden]")) champ.focus(); }, 50);   // la fenêtre a pu être refermée entre-temps
     // Crédit du jour (coût réel des réponses du tuteur, remis à zéro à minuit).
     sb.rpc("ia_mon_quota").then(({ data, error }) => {
       const c = $("#compte-credit"); if (!c) return;
