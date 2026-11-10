@@ -105,6 +105,12 @@ button.card:hover { border-color: var(--accent); }
 .field .hint { color: var(--muted); font-size: .85rem; margin: 0; }
 [hidden] { display: none !important; }  /* version web : l'attribut hidden l'emporte sur display (écran de connexion) */
 /* Version web : la voix (dictée, lecture, mode oral) */
+/* Version web : rien ne dépasse la largeur de l'écran (longues formules, tableaux, mots) : les cases de grille
+   ne s'élargissent plus selon leur contenu, les formules et tableaux défilent à l'intérieur de la bulle. */
+.thread, .msg { grid-template-columns: minmax(0, 1fr); }
+.msg > *, .bubble, .md > * { min-width: 0; max-width: 100%; }
+.md mjx-container[display="true"] { display: block; max-width: 100%; }
+#app { overflow-x: clip; }
 .msg-actions { display: flex; margin-top: 6px; }
 .msg-actions .lire { min-height: 34px; padding: 4px 12px; font-size: .88rem; font-weight: 700; }
 .msg-actions .lire[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
