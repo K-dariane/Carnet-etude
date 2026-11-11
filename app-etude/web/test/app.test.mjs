@@ -390,6 +390,21 @@ test("connexion par code (sans mot de passe) : toujours possible en secours", as
   await pg.waitForSelector(".card");
 });
 
+test("affichage : une réponse avec longue formule, mot interminable et large tableau ne dépasse pas l'écran", async () => {
+  const large = "### Axiome 4\n\\[ \\forall m, n \\in \\mathbb{N},\\ (S(m) = S(n)) \\Rightarrow (m = n) \\quad \\text{et} \\quad \\sum_{k=0}^{n} \\binom{n}{k} x^k y^{n-k} = (x+y)^n \\]\n\nUnmotsansespacequiestvraimenttrestrestrestreslongpourtesterledebordementdelabulle.\n\n| A | B | C | D | E | F | G | H |\n|---|---|---|---|---|---|---|---|\n| colonne | colonne | colonne | colonne | colonne | colonne | colonne | colonne |";
+  reponseChat = r => r.fulfill({ contentType: "application/x-ndjson", body: ndjson(large) });
+  await pg.click(".cards > .card"); await pg.waitForSelector("#msg");
+  const n = await pg.locator(".msg.assistant").count();
+  await pg.fill("#msg", "Montre l'axiome"); await pg.click("#sendbtn");
+  await attendre(() => !document.querySelector("[data-a=stop]") && document.querySelectorAll(".msg.assistant").length > 0, 15000);
+  await pg.waitForFunction(n => document.querySelectorAll(".msg.assistant").length > n, n);
+  await pg.waitForTimeout(1500);   // rendu des formules
+  reponseChat = null;
+  const l = await pg.evaluate(() => ({ page: document.documentElement.scrollWidth, ecran: document.documentElement.clientWidth }));
+  assert.ok(l.page <= l.ecran, `la page fait ${l.page} px pour un écran de ${l.ecran} px`);
+  await pg.click("[data-a=home]");
+});
+
 test("voix : formules et mise en forme traduites en paroles", async () => {
   const p = t => pg.evaluate(x => window.carnetVoix.paroles(x), t);
   assert.equal(await p("\\( \\frac{a+1}{b} \\)"), "a plus 1 sur b");

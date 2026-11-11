@@ -90,10 +90,10 @@ test("adresse partagée avec une erreur (#error=…) : même message, adresse ne
 
 test("échec de la connexion Google : la vraie raison est affichée, pas « lien expiré »", async () => {
   await pg.goto("about:blank");
-  await pg.goto(BASE + "#error=server_error&error_code=unexpected_failure&error_description=Unable+to+exchange+external+code%3A+4%2F0Ab");
+  await pg.goto(BASE + "#error=server_error&error_code=unexpected_failure&error_description=Unable+to+exchange+external+code%253A+4%252F0Ab");
   await pg.waitForSelector("#f-connexion");
   const t = await pg.textContent("#login-err");
-  assert.match(t, /La connexion n'a pas abouti/); assert.match(t, /Unable to exchange external code/);
+  assert.match(t, /La connexion n'a pas abouti/); assert.match(t, /Unable to exchange external code: 4\/0Ab/, "message décodé (%3A, %2F)");
   assert.doesNotMatch(t, /expiré/);
   assert.equal(pg.url(), BASE);
   await pg.goto("about:blank");
@@ -133,4 +133,19 @@ test("page de confidentialité : en ligne, liée depuis l'écran de connexion, a
   assert.match(await pg.textContent("body"), /Anthropic/);
   const html = readFileSync(join(web, "app/confidentialite.html"), "utf8");
   assert.doesNotMatch(html, /<script/i, "page statique, sans script");
+});
+
+test("table des profils absente dans Supabase : l'app démarre, « Mon compte » s'ouvre avec la déconnexion", async () => {
+  await pg.goto("about:blank"); await pg.goto(BASE);
+  await pg.evaluate(() => { localStorage.clear(); });
+  await pg.goto("about:blank"); await pg.goto(BASE); await pg.waitForSelector("#f-connexion");
+  await pg.evaluate(() => { window.__fakeOAuth("sans@test.cd", "Sans Profil"); window.__fake.echecs.profils = "Could not find the table 'public.profils' in the schema cache";
+    window.__fake.tables.projets.push({ id: "psp", owner: window.__fake.session.user.id, titre: "Projet", type: "etude", matiere: "", objectif: "", echeance: null, parent_id: null, focus: null, nb_supports: 0, plan: [], evolutions: [], extra: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    window.__fakeSave(); });
+  await pg.reload(); await pg.waitForSelector("[data-a=compte]");
+  await pg.click("[data-a=compte]"); await pg.waitForSelector("#compte");
+  assert.match(await pg.textContent("#compte"), /profil n'est pas disponible/);
+  assert.equal(await pg.isVisible("#f-compte"), false);
+  await pg.click("#m-sortir"); await Promise.all([pg.waitForEvent("load"), pg.click("#m-sortir")]);
+  await pg.waitForSelector("#f-connexion");
 });
