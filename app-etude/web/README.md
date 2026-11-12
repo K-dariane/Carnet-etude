@@ -48,7 +48,11 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 4. **Authentication → Providers → Google** : identifiant client et secret de Google Cloud. Dans Google Cloud, l'URI de redirection autorisée est `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
 5. **`app/config.js`** : contient la clé publique (`sb_publishable_…`). Elle est faite pour être visible.
 
-### Mise en ligne (GitHub Pages)
+### Passage à Cloudflare Pages (en cours)
+
+Décision du 2026-11-12 : l'app quitte GitHub Pages pour **Cloudflare Pages**, d'abord avec une adresse gratuite (`….pages.dev`). Le dépôt deviendra ensuite privé. Guide pas à pas : **`GUIDE-CLOUDFLARE.md`**. `app/_headers` règle le cache (dernière version toujours chargée), la sécurité et l'accès au micro chez Cloudflare.
+
+### Mise en ligne (GitHub Pages, jusqu'à la bascule)
 
 Adresse de l'app : **https://k-dariane.github.io/Carnet-etude/**
 

@@ -1,0 +1,19 @@
+# Réglages lus par Cloudflare Pages (ignorés par les autres hébergeurs).
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: microphone=(self), camera=(self), geolocation=(), payment=()
+  X-Robots-Tag: noindex, nofollow
+
+# Pages et scripts de l'app : le navigateur vérifie à chaque ouverture qu'il a la dernière version.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/*.js
+  Cache-Control: no-cache
+/*.html
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
