@@ -13,7 +13,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 | Fichiers (Supabase Storage) et copie des fichiers de l'artifact | Fait, testé ; copie à lancer |
 | Comptes : e-mail et mot de passe, confirmation de l'adresse, mot de passe oublié, code de secours, Google (Facebook prêt côté app ; pas d'Apple), profil avec niveau d'étude, « Mon compte » | Fait, testé (faux Supabase) ; réglages Supabase : voir `GUIDE-CONNEXION.md` |
 | Branchement de l'app | Fait, testé (faux Supabase) |
-| Mise en ligne (GitHub Pages) | Préparée ; à activer (voir « Mise en ligne ») |
+| Mise en ligne | GitHub Pages en service ; passage à Cloudflare Pages (carnet-etude.app) en cours |
 
 ## L'app (`app/`)
 
@@ -50,7 +50,7 @@ La V1 (`../carnet/index.html`, artifact claude.ai) n'est pas modifiée.
 
 ### Passage à Cloudflare Pages (en cours)
 
-Décision du 2026-11-12 : l'app quitte GitHub Pages pour **Cloudflare Pages**, d'abord avec une adresse gratuite (`….pages.dev`). Le dépôt deviendra ensuite privé. Guide pas à pas : **`GUIDE-CLOUDFLARE.md`**. `app/_headers` règle le cache (dernière version toujours chargée), la sécurité et l'accès au micro chez Cloudflare.
+Décision du 2026-11-12 : l'app quitte GitHub Pages pour **Cloudflare Pages**, avec le domaine **carnet-etude.app** (acheté chez Cloudflare le 2026-11-12). Le dépôt deviendra ensuite privé. Guide pas à pas : **`GUIDE-CLOUDFLARE.md`**. `app/_headers` règle le cache (dernière version toujours chargée), la sécurité et l'accès au micro chez Cloudflare.
 
 ### Mise en ligne (GitHub Pages, jusqu'à la bascule)
 
