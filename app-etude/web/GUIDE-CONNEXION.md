@@ -2,7 +2,7 @@
 
 Modes de connexion : e-mail et mot de passe, code reçu par e-mail, Google, Facebook. Apple n'est pas proposé (décision du 2026-11-07).
 
-Projet Supabase : `xyrlifukufcntwinrtvz`. App : https://k-dariane.github.io/Carnet-etude/
+Projet Supabase : `xyrlifukufcntwinrtvz`. App : https://carnet-etude.app/ (ancienne adresse, jusqu'à la bascule : https://k-dariane.github.io/Carnet-etude/)
 
 Adresse de retour à donner à Google et Facebook (toujours la même) :
 
@@ -60,10 +60,10 @@ Google Cloud (https://console.cloud.google.com/) → ton projet → **Google Aut
 | App name | `Carnet d'étude` |
 | User support email | ton adresse Gmail |
 | App logo | **laisse vide pour l'instant** : un logo déclenche une vérification par Google, qui prend plusieurs jours |
-| Application home page | `https://k-dariane.github.io/Carnet-etude/` |
-| Application privacy policy link | `https://k-dariane.github.io/Carnet-etude/confidentialite.html` |
+| Application home page | `https://carnet-etude.app/` |
+| Application privacy policy link | `https://carnet-etude.app/confidentialite.html` |
 | Application terms of service link | laisse vide (pas encore de conditions d'utilisation) |
-| Authorized domains | ajoute `k-dariane.github.io` puis `supabase.co` |
+| Authorized domains | ajoute `carnet-etude.app` puis `supabase.co` (retire `k-dariane.github.io` s'il y est) |
 | Developer contact information | ton adresse Gmail |
 
 Clique sur **Save**. Ensuite seulement, **Audience** → **Publier l'application**.
@@ -80,8 +80,8 @@ Supabase et Google acceptent bien la demande : la page « Choisir un compte » s
    Supabase → **Authentication** → **Sign In / Providers** → **Google** : recolle-le dans **Client Secret (for OAuth)**, vérifie le **Client ID**, puis **Save**.
 3. **L'adresse de retour est-elle autorisée ?** Dans le même client Google, sous **URI de redirection autorisés**, il doit y avoir exactement `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`.
 4. **L'adresse de l'app est-elle bonne ?** Supabase → **Authentication** → **URL Configuration** :
-   - Site URL `https://k-dariane.github.io/Carnet-etude/` ;
-   - Redirect URLs `https://k-dariane.github.io/Carnet-etude/**`.
+   - Site URL `https://carnet-etude.app/` ;
+   - Redirect URLs `https://carnet-etude.app/**`.
 5. **Réessaie sur l'app.** La nouvelle version affiche le **vrai message** de Supabase au lieu de « lien expiré ». Si ça bloque encore, fais une capture de ce message.
 
 ## 3. Facebook (gratuit, environ 1 h)
@@ -93,8 +93,8 @@ Supabase et Google acceptent bien la demande : la page « Choisir un compte » s
    - **URI de redirection OAuth valides** : `https://xyrlifukufcntwinrtvz.supabase.co/auth/v1/callback`
    - Permissions : `email` et `public_profile` (déjà présentes par défaut).
 3. **Paramètres de l'app** → **Général** : note l'**ID de l'app** et la **Clé secrète**. Remplis aussi :
-   - **URL de la politique de confidentialité** : `https://k-dariane.github.io/Carnet-etude/confidentialite.html`
-   - **URL des instructions de suppression des données** : `https://k-dariane.github.io/Carnet-etude/confidentialite.html#suppression`
+   - **URL de la politique de confidentialité** : `https://carnet-etude.app/confidentialite.html`
+   - **URL des instructions de suppression des données** : `https://carnet-etude.app/confidentialite.html#suppression`
 4. Supabase → **Authentication** → **Sign In / Providers** → **Facebook** : active-le, colle l'**ID** dans **Facebook client ID** et la **clé secrète** dans **Facebook secret**, puis **Save**.
 5. De retour chez Meta : passe l'app en mode **Live** (« En ligne ») en haut de la page. En mode « Développement », seuls toi et les testeurs ajoutés à l'app peuvent se connecter.
 

@@ -149,3 +149,11 @@ test("table des profils absente dans Supabase : l'app démarre, « Mon compte »
   await pg.click("#m-sortir"); await Promise.all([pg.waitForEvent("load"), pg.click("#m-sortir")]);
   await pg.waitForSelector("#f-connexion");
 });
+
+test("Cloudflare Pages : fichier _headers (dernière version toujours chargée, micro autorisé, pas d'indexation)", () => {
+  const h = readFileSync(join(web, "app/_headers"), "utf8");
+  for (const chemin of ["/index.html", "/*.js"]) assert.match(h, new RegExp(`^${chemin.replace(/[*.]/g, "\\$&")}\\n\\s+Cache-Control: no-cache`, "m"), chemin);
+  assert.match(h, /Permissions-Policy: microphone=\(self\)/);
+  assert.match(h, /X-Robots-Tag: noindex/);
+  assert.doesNotMatch(h, /sb_secret_|sk-ant-|service_role/);
+});
